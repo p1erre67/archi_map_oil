@@ -1,0 +1,20 @@
+## .NET
+bin/
+obj/
+*.user
+*.suo
+.vs/
+*.DotSettings.user
+
+## Logs
+logs/
+*.log
+
+## Environment
+.env
+appsettings.local.json
+appsettings.Local.json
+
+## Rider / VS
+.idea/
+*.sln.iml

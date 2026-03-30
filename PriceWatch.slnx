@@ -1,0 +1,15 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/PriceWatch.Api/PriceWatch.Api.csproj" />
+    <Project Path="src/PriceWatch.SharedKernel/PriceWatch.SharedKernel.csproj" />
+  </Folder>
+  <Folder Name="/src/Modules/">
+    <Project Path="src/Modules/PriceWatch.Modules.Prices/PriceWatch.Modules.Prices.csproj" />
+    <Project Path="src/Modules/PriceWatch.Modules.Cards/PriceWatch.Modules.Cards.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/PriceWatch.ArchitectureTests/PriceWatch.ArchitectureTests.csproj" />
+    <Project Path="tests/PriceWatch.IntegrationTests/PriceWatch.IntegrationTests.csproj" />
+    <Project Path="tests/PriceWatch.UnitTests/PriceWatch.UnitTests.csproj" />
+  </Folder>
+</Solution>
