@@ -1,6 +1,7 @@
 using MediatR;
 using PriceWatch.Modules.Prices.Application.Interfaces;
 using PriceWatch.Modules.Prices.Domain.Entities;
+using PriceWatch.Modules.Prices.Domain.Events;
 using PriceWatch.Modules.Prices.Domain.Repositories;
 using PriceWatch.SharedKernel.Domain.Results;
 
@@ -10,13 +11,16 @@ internal sealed class SyncStationPricesCommandHandler : IRequestHandler<SyncStat
 {
     private readonly IStationPriceRepository _repository;
     private readonly IPricesUnitOfWork _unitOfWork;
+    private readonly IPublisher _publisher;
 
     public SyncStationPricesCommandHandler(
         IStationPriceRepository repository,
-        IPricesUnitOfWork unitOfWork)
+        IPricesUnitOfWork unitOfWork,
+        IPublisher publisher)
     {
         _repository = repository;
         _unitOfWork = unitOfWork;
+        _publisher = publisher;
     }
 
     public async Task<Result> Handle(SyncStationPricesCommand request, CancellationToken cancellationToken)
@@ -63,6 +67,8 @@ internal sealed class SyncStationPricesCommandHandler : IRequestHandler<SyncStat
         }
 
         await _unitOfWork.SaveChangesAsync(cancellationToken);
+
+        await _publisher.Publish(new StationPricesSyncedEvent(request.Stations.Count), cancellationToken);
 
         return Result.Success();
     }

@@ -32,6 +32,14 @@ internal sealed class StationPriceRepository : IStationPriceRepository
             .FirstOrDefaultAsync(s => s.Id.Value == id, cancellationToken);
     }
 
+    public async Task<IReadOnlyList<StationPrice>> GetAllAsync(
+        CancellationToken cancellationToken = default)
+    {
+        return await _context.StationPrices
+            .Include(s => s.FuelPrices)
+            .ToListAsync(cancellationToken);
+    }
+
     public async Task<IReadOnlyList<StationPrice>> GetCheapestByFuelTypeAsync(
         string fuelType,
         int limit,
