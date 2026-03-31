@@ -23,7 +23,6 @@
 
   <ItemGroup>
     <ProjectReference Include="..\Modules\PriceWatch.Modules.Prices\PriceWatch.Modules.Prices.csproj" />
-    <ProjectReference Include="..\Modules\PriceWatch.Modules.Cards\PriceWatch.Modules.Cards.csproj" />
   </ItemGroup>
 
 </Project>

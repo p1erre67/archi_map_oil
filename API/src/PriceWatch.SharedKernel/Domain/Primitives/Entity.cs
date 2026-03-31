@@ -29,6 +29,7 @@ public abstract class Entity<TId> : IEquatable<Entity<TId>>
     public override int GetHashCode() =>
         HashCode.Combine(GetType(), Id);
 
+    //définit les opérateurs d'égalité pour comparer les entités par leur identité
     public static bool operator ==(Entity<TId>? left, Entity<TId>? right) =>
         left?.Equals(right) ?? right is null;
 

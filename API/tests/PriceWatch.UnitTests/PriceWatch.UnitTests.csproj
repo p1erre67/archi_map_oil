@@ -19,8 +19,5 @@
     <Using Include="Xunit" />
   </ItemGroup>
 
-  <ItemGroup>
-    <ProjectReference Include="..\..\src\Modules\PriceWatch.Modules.Cards\PriceWatch.Modules.Cards.csproj" />
-  </ItemGroup>
 
 </Project>

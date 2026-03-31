@@ -23,7 +23,6 @@
   <ItemGroup>
     <ProjectReference Include="..\..\src\PriceWatch.SharedKernel\PriceWatch.SharedKernel.csproj" />
     <ProjectReference Include="..\..\src\Modules\PriceWatch.Modules.Prices\PriceWatch.Modules.Prices.csproj" />
-    <ProjectReference Include="..\..\src\Modules\PriceWatch.Modules.Cards\PriceWatch.Modules.Cards.csproj" />
   </ItemGroup>
 
 </Project>

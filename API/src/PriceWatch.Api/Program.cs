@@ -1,13 +1,13 @@
+using FluentValidation;
+using MediatR;
 using PriceWatch.Api.Extensions;
 using PriceWatch.Api.Infrastructure;
-using PriceWatch.Modules.Cards.Infrastructure;
+using PriceWatch.Modules.Prices.Endpoints;
 using PriceWatch.Modules.Prices.Infrastructure;
 using PriceWatch.SharedKernel.Application.Behaviours;
 using Scalar.AspNetCore;
 using Serilog;
 using System.Reflection;
-using FluentValidation;
-using MediatR;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -24,8 +24,6 @@ builder.Services.AddProblemDetails();
 
 // ── Modules ───────────────────────────────────────────────────────────────────
 builder.Services.AddPricesModule(builder.Configuration);
-builder.Services.AddCardsModule(builder.Configuration);
-
 // ── MediatR ───────────────────────────────────────────────────────────────────
 builder.Services.AddMediatR(cfg =>
 {
@@ -54,14 +52,13 @@ if (app.Environment.IsDevelopment())
 
 app.UseSerilogRequestLogging();
 
-app.MapModuleEndpoints([..ModuleAssemblies()]);
+app.MapModuleEndpoints([..ModuleAssemblies()]);// = WebApplicationExtensions.MapModuleEndpoints(app,[..ModuleAssemblies()]);
 
 app.Run();
 
 static Assembly[] ModuleAssemblies() =>
 [
     typeof(PriceWatch.Modules.Prices.Infrastructure.DependencyInjection).Assembly,
-    typeof(PriceWatch.Modules.Cards.Infrastructure.DependencyInjection).Assembly,
 ];
 
 // Exposes Program to WebApplicationFactory in integration tests.

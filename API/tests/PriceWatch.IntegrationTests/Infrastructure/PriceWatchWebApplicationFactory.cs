@@ -2,7 +2,6 @@ using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
-using PriceWatch.Modules.Cards.Infrastructure.Persistence;
 using PriceWatch.Modules.Prices.Application.DTOs;
 using PriceWatch.Modules.Prices.Application.Interfaces;
 using PriceWatch.Modules.Prices.Infrastructure.Persistence;
@@ -70,7 +69,6 @@ public sealed class PriceWatchWebApplicationFactory
         var sp = scope.ServiceProvider;
 
         await sp.GetRequiredService<PricesDbContext>().Database.MigrateAsync();
-        await sp.GetRequiredService<CardsDbContext>().Database.MigrateAsync();
     }
 }
 

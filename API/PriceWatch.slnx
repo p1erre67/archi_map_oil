@@ -5,7 +5,6 @@
   </Folder>
   <Folder Name="/src/Modules/">
     <Project Path="src/Modules/PriceWatch.Modules.Prices/PriceWatch.Modules.Prices.csproj" />
-    <Project Path="src/Modules/PriceWatch.Modules.Cards/PriceWatch.Modules.Cards.csproj" />
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/PriceWatch.ArchitectureTests/PriceWatch.ArchitectureTests.csproj" />
