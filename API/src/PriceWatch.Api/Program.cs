@@ -2,7 +2,7 @@ using FluentValidation;
 using MediatR;
 using PriceWatch.Api.Extensions;
 using PriceWatch.Api.Infrastructure;
-using PriceWatch.Modules.Prices.Endpoints;
+using PriceWatch.Modules.History.Infrastructure;
 using PriceWatch.Modules.Prices.Infrastructure;
 using PriceWatch.SharedKernel.Application.Behaviours;
 using Scalar.AspNetCore;
@@ -24,6 +24,7 @@ builder.Services.AddProblemDetails();
 
 // ── Modules ───────────────────────────────────────────────────────────────────
 builder.Services.AddPricesModule(builder.Configuration);
+builder.Services.AddHistoryModule(builder.Configuration);
 // ── MediatR ───────────────────────────────────────────────────────────────────
 builder.Services.AddMediatR(cfg =>
 {
@@ -59,6 +60,7 @@ app.Run();
 static Assembly[] ModuleAssemblies() =>
 [
     typeof(PriceWatch.Modules.Prices.Infrastructure.DependencyInjection).Assembly,
+    typeof(PriceWatch.Modules.History.Infrastructure.DependencyInjection).Assembly,
 ];
 
 // Exposes Program to WebApplicationFactory in integration tests.
