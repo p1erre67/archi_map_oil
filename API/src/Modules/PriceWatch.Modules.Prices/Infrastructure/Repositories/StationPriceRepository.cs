@@ -56,6 +56,33 @@ internal sealed class StationPriceRepository : IStationPriceRepository
             .ToListAsync(cancellationToken);
     }
 
+    public async Task<IReadOnlyList<StationPrice>> GetNearbyAsync(
+        double latitude,
+        double longitude,
+        double radiusKm,
+        CancellationToken cancellationToken = default)
+    {
+        const double earthRadiusKm = 6371.0;
+        var latRad = latitude * Math.PI / 180.0;
+        var lonRad = longitude * Math.PI / 180.0;
+
+        return await _context.StationPrices
+            .Include(s => s.FuelPrices)
+            .Where(s =>
+                earthRadiusKm * 2.0 * Math.Asin(Math.Sqrt(
+                    Math.Pow(Math.Sin((s.Latitude * Math.PI / 180.0 - latRad) / 2.0), 2) +
+                    Math.Cos(latRad) * Math.Cos(s.Latitude * Math.PI / 180.0) *
+                    Math.Pow(Math.Sin((s.Longitude * Math.PI / 180.0 - lonRad) / 2.0), 2)
+                )) <= radiusKm)
+            .OrderBy(s =>
+                earthRadiusKm * 2.0 * Math.Asin(Math.Sqrt(
+                    Math.Pow(Math.Sin((s.Latitude * Math.PI / 180.0 - latRad) / 2.0), 2) +
+                    Math.Cos(latRad) * Math.Cos(s.Latitude * Math.PI / 180.0) *
+                    Math.Pow(Math.Sin((s.Longitude * Math.PI / 180.0 - lonRad) / 2.0), 2)
+                )))
+            .ToListAsync(cancellationToken);
+    }
+
     public void Add(StationPrice stationPrice)
         => _context.StationPrices.Add(stationPrice);
 

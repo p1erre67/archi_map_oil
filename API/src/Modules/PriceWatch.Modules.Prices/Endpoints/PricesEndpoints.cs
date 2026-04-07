@@ -6,6 +6,7 @@ using PriceWatch.Modules.Prices.Application.DTOs;
 using PriceWatch.Modules.Prices.Application.Commands.SyncStationPrices;
 using PriceWatch.Modules.Prices.Application.Interfaces;
 using PriceWatch.Modules.Prices.Application.Queries.GetCheapestStations;
+using PriceWatch.Modules.Prices.Application.Queries.GetNearbyStations;
 using PriceWatch.Modules.Prices.Application.Queries.GetStationPrices;
 using PriceWatch.SharedKernel.Application.Interfaces;
 
@@ -38,6 +39,20 @@ public sealed class PricesEndpoints : IEndpoint
             CancellationToken ct) =>
         {
             var query = new GetCheapestStationsQuery(fuelType, limit <= 0 ? 10 : limit);
+            var result = await sender.Send(query, ct);
+            return result.IsSuccess
+                ? Results.Ok(result.Value)
+                : Results.Problem(result.Error.Description, statusCode: StatusCodes.Status500InternalServerError);
+        });
+
+        group.MapGet("/nearby", async (
+            double latitude,
+            double longitude,
+            int radiusKm,
+            ISender sender,
+            CancellationToken ct) =>
+        {
+            var query = new GetNearbyStationsQuery(latitude, longitude, radiusKm <= 0 ? 10 : radiusKm);
             var result = await sender.Send(query, ct);
             return result.IsSuccess
                 ? Results.Ok(result.Value)

@@ -18,3 +18,8 @@ appsettings.Local.json
 ## Rider / VS
 .idea/
 *.sln.iml
+
+## Node / Front
+node_modules/
+dist/
+.vite/
