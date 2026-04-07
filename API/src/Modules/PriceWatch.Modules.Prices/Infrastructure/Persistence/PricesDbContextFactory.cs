@@ -1,3 +1,4 @@
+using MediatR;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Design;
 
@@ -17,6 +18,19 @@ internal sealed class PricesDbContextFactory : IDesignTimeDbContextFactory<Price
                 mySql => mySql.MigrationsHistoryTable("__ef_migrations_prices"))
             .Options;
 
-        return new PricesDbContext(options);
+        return new PricesDbContext(options, new NullPublisher());
+    }
+
+    /// <summary>
+    /// No-op publisher — EF tooling never triggers domain events.
+    /// </summary>
+    private sealed class NullPublisher : IPublisher
+    {
+        public Task Publish(object notification, CancellationToken cancellationToken = default)
+            => Task.CompletedTask;
+
+        public Task Publish<TNotification>(TNotification notification, CancellationToken cancellationToken = default)
+            where TNotification : INotification
+            => Task.CompletedTask;
     }
 }

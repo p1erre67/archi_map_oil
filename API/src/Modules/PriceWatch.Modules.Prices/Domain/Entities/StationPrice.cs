@@ -1,3 +1,4 @@
+using PriceWatch.Modules.Prices.Domain.Events;
 using PriceWatch.Modules.Prices.Domain.ValueObjects;
 using PriceWatch.SharedKernel.Domain.Primitives;
 
@@ -92,6 +93,11 @@ public sealed class StationPrice : AggregateRoot<StationPriceId>
         }
 
         LastUpdated = DateTime.UtcNow;
+    }
+
+    public void MarkAsSynced(int stationCount)
+    {
+        RaiseDomainEvent(new StationPricesSyncedEvent(stationCount));
     }
 
 #pragma warning disable CS8618
