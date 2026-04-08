@@ -10,6 +10,7 @@ export interface StationPriceDto {
   id: string;
   externalStationId: string;
   stationName: string;
+  brandName: string;
   address: string;
   city: string;
   postalCode: string;

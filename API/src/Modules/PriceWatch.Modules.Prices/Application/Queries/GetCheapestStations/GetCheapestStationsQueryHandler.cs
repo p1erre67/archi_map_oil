@@ -28,6 +28,7 @@ internal sealed class GetCheapestStationsQueryHandler
             s.Id.Value,
             s.ExternalStationId,
             s.StationName,
+            s.Brand?.Name,
             s.Address,
             s.City,
             s.PostalCode,

@@ -20,6 +20,8 @@ public sealed class StationPrice : AggregateRoot<StationPriceId>
     public double Latitude { get; private set; }
     public double Longitude { get; private set; }
     public DateTime LastUpdated { get; private set; }
+    public int? BrandId { get; private set; }
+    public Brand? Brand { get; private set; }
 
     public IReadOnlyList<FuelPrice> FuelPrices => _fuelPrices.AsReadOnly();
 
@@ -50,9 +52,10 @@ public sealed class StationPrice : AggregateRoot<StationPriceId>
         string city,
         string postalCode,
         double latitude,
-        double longitude)
+        double longitude,
+        int? brandId = null)
     {
-        return new StationPrice(
+        var station = new StationPrice(
             StationPriceId.New(),
             externalStationId,
             stationName,
@@ -61,6 +64,8 @@ public sealed class StationPrice : AggregateRoot<StationPriceId>
             postalCode,
             latitude,
             longitude);
+        station.BrandId = brandId;
+        return station;
     }
 
     public void UpdateInfo(
@@ -69,7 +74,8 @@ public sealed class StationPrice : AggregateRoot<StationPriceId>
         string city,
         string postalCode,
         double latitude,
-        double longitude)
+        double longitude,
+        int? brandId = null)
     {
         StationName = stationName;
         Address = address;
@@ -77,6 +83,7 @@ public sealed class StationPrice : AggregateRoot<StationPriceId>
         PostalCode = postalCode;
         Latitude = latitude;
         Longitude = longitude;
+        BrandId = brandId;
         LastUpdated = DateTime.UtcNow;
     }
 

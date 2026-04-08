@@ -27,6 +27,7 @@ public static class DependencyInjection
 
         services.AddScoped<IPricesUnitOfWork>(sp => sp.GetRequiredService<PricesDbContext>());
         services.AddScoped<IStationPriceRepository, StationPriceRepository>();
+        services.AddScoped<IBrandRepository, BrandRepository>();
 
         var baseUrl = configuration["FuelPriceApi:BaseUrl"]
             ?? "https://api.prix-carburants.2aaz.fr";
@@ -35,6 +36,9 @@ public static class DependencyInjection
         services.AddHttpClient<IFuelPriceApiClient, FuelPriceApiClient>(client =>
         {
             client.BaseAddress = new Uri(baseUrl);
+            client.DefaultRequestHeaders.Accept.Add(
+                new System.Net.Http.Headers.MediaTypeWithQualityHeaderValue("application/json"));
+            client.DefaultRequestHeaders.UserAgent.ParseAdd("PriceWatch/1.0");
         });
 
         return services;

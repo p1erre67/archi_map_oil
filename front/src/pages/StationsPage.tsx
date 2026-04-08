@@ -2,17 +2,27 @@ import { useState } from "react";
 import { useNearbyStations } from "../hooks/useNearbyStations";
 import { useSyncPrices } from "../hooks/useSyncPrices";
 import { StationCard } from "../components/StationCard";
+import { StationsMap } from "../components/StationsMap";
+import { CityAutocomplete } from "../components/CityAutocomplete";
+import type { City } from "../hooks/useCitySearch";
+
+type ViewTab = "list" | "map";
 
 export function StationsPage() {
-  const [latitude, setLatitude] = useState(48.8566);
-  const [longitude, setLongitude] = useState(2.3522);
-  const [radiusKm, setRadiusKm] = useState(10);
+  const [selectedCity, setSelectedCity] = useState<City | null>(null);
+  const [radiusKm, setRadiusKm] = useState(5);
+  const [activeTab, setActiveTab] = useState<ViewTab>("list");
 
-  const { data: stations, isLoading, error } = useNearbyStations(latitude, longitude, radiusKm);
+  const { data: stations, isLoading, error } = useNearbyStations(
+    selectedCity?.latitude ?? 0,
+    selectedCity?.longitude ?? 0,
+    radiusKm
+  );
   const sync = useSyncPrices();
 
   function handleSync() {
-    sync.mutate({ latitude, longitude, radiusKm });
+    if (!selectedCity) return;
+    sync.mutate({ latitude: selectedCity.latitude, longitude: selectedCity.longitude, radiusKm });
   }
 
   return (
@@ -21,23 +31,8 @@ export function StationsPage() {
 
       <div className="filters">
         <label>
-          Latitude
-          <input
-            type="number"
-            step="0.0001"
-            value={latitude}
-            onChange={(e) => setLatitude(Number(e.target.value))}
-          />
-        </label>
-
-        <label>
-          Longitude
-          <input
-            type="number"
-            step="0.0001"
-            value={longitude}
-            onChange={(e) => setLongitude(Number(e.target.value))}
-          />
+          Ville
+          <CityAutocomplete onSelect={setSelectedCity} />
         </label>
 
         <label>
@@ -50,7 +45,7 @@ export function StationsPage() {
           />
         </label>
 
-        <button onClick={handleSync} disabled={sync.isPending}>
+        <button onClick={handleSync} disabled={sync.isPending || !selectedCity}>
           {sync.isPending ? "Sync en cours..." : "Synchroniser les prix"}
         </button>
       </div>
@@ -58,17 +53,47 @@ export function StationsPage() {
       {sync.isSuccess && <p className="success">{sync.data.message}</p>}
       {sync.isError && <p className="error">Erreur sync : {sync.error.message}</p>}
 
+      <div className="tabs">
+        <button
+          className={`tab ${activeTab === "list" ? "tab-active" : ""}`}
+          onClick={() => setActiveTab("list")}
+        >
+          Liste
+        </button>
+        <button
+          className={`tab ${activeTab === "map" ? "tab-active" : ""}`}
+          onClick={() => setActiveTab("map")}
+        >
+          Carte
+        </button>
+      </div>
+
       {isLoading && <p>Chargement...</p>}
       {error && <p className="error">Erreur : {error.message}</p>}
 
-      <div className="stations-grid">
-        {stations?.map((station) => (
-          <StationCard key={station.id} station={station} />
-        ))}
-      </div>
+      {activeTab === "list" && (
+        <>
+          <div className="stations-grid">
+            {stations?.map((station) => (
+              <StationCard key={station.id} station={station} />
+            ))}
+          </div>
 
-      {stations && stations.length === 0 && (
-        <p>Aucune station trouvee. Essayez de synchroniser d'abord.</p>
+          {stations && stations.length === 0 && selectedCity && (
+            <p>Aucune station trouvee. Essayez de synchroniser d'abord.</p>
+          )}
+        </>
+      )}
+
+      {activeTab === "map" && selectedCity && stations && (
+        <StationsMap
+          stations={stations}
+          center={[selectedCity.latitude, selectedCity.longitude]}
+        />
+      )}
+
+      {activeTab === "map" && !selectedCity && (
+        <p>Selectionnez une ville pour afficher la carte.</p>
       )}
     </div>
   );

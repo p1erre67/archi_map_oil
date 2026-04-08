@@ -4,6 +4,7 @@ public sealed record StationPriceDto(
     Guid Id,
     string ExternalStationId,
     string StationName,
+    string? BrandName,
     string Address,
     string City,
     string PostalCode,

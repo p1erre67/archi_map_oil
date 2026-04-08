@@ -20,6 +20,7 @@ internal sealed class StationPriceRepository : IStationPriceRepository
     {
         return await _context.StationPrices
             .Include(s => s.FuelPrices)
+            .Include(s => s.Brand)
             .FirstOrDefaultAsync(s => s.ExternalStationId == externalStationId, cancellationToken);
     }
 
@@ -29,6 +30,7 @@ internal sealed class StationPriceRepository : IStationPriceRepository
     {
         return await _context.StationPrices
             .Include(s => s.FuelPrices)
+            .Include(s => s.Brand)
             .FirstOrDefaultAsync(s => s.Id.Value == id, cancellationToken);
     }
 
@@ -37,6 +39,7 @@ internal sealed class StationPriceRepository : IStationPriceRepository
     {
         return await _context.StationPrices
             .Include(s => s.FuelPrices)
+            .Include(s => s.Brand)
             .ToListAsync(cancellationToken);
     }
 
@@ -47,6 +50,7 @@ internal sealed class StationPriceRepository : IStationPriceRepository
     {
         return await _context.StationPrices
             .Include(s => s.FuelPrices)
+            .Include(s => s.Brand)
             .Where(s => s.FuelPrices.Any(fp => fp.FuelType == fuelType))
             .OrderBy(s => s.FuelPrices
                 .Where(fp => fp.FuelType == fuelType)
@@ -68,6 +72,7 @@ internal sealed class StationPriceRepository : IStationPriceRepository
 
         return await _context.StationPrices
             .Include(s => s.FuelPrices)
+            .Include(s => s.Brand)
             .Where(s =>
                 earthRadiusKm * 2.0 * Math.Asin(Math.Sqrt(
                     Math.Pow(Math.Sin((s.Latitude * Math.PI / 180.0 - latRad) / 2.0), 2) +

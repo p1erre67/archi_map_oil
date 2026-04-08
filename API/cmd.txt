@@ -1,0 +1,10 @@
+dotnet tool install --global dotnet-ef 2>&1
+
+dotnet ef migrations add InitPrices --project src/Modules/PriceWatch.Modules.Prices --startup-project src/PriceWatch.Api
+dotnet ef migrations add InitHistory --project src/Modules/PriceWatch.Modules.History --startup-project src/PriceWatch.Api
+dotnet ef migrations add AddBrands --project src/Modules/PriceWatch.Modules.Prices --startup-project src/PriceWatch.Api 
+
+dotnet ef database update --project src/Modules/PriceWatch.Modules.Prices --startup-project src/PriceWatch.Api
+dotnet ef database update --project src/Modules/PriceWatch.Modules.History --startup-project src/PriceWatch.Api 
+
+

@@ -74,7 +74,7 @@ public sealed class PriceSyncOptions
 {
     public const string SectionName = "PriceSync";
 
-    public int IntervalMinutes { get; set; } = 30;
+    public int IntervalMinutes { get; set; } = 1440;
     public double Latitude { get; set; } = 48.8566;
     public double Longitude { get; set; } = 2.3522;
     public int RadiusKm { get; set; } = 5;

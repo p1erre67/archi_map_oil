@@ -11,7 +11,11 @@ public sealed record ExternalStationDto(
     string PostalCode,
     double Lat,
     double Lon,
-    IReadOnlyList<ExternalFuelPriceDto> FuelPrices);
+    IReadOnlyList<ExternalFuelPriceDto> FuelPrices,
+    int? BrandId = null,
+    string? BrandName = null,
+    string? BrandShortName = null,
+    int? BrandNbStations = null);
 
 /// <summary>
 /// DTO representing one fuel price entry from the external API.

@@ -29,6 +29,7 @@ internal sealed class GetStationPricesQueryHandler
             station.Id.Value,
             station.ExternalStationId,
             station.StationName,
+            station.Brand?.Name,
             station.Address,
             station.City,
             station.PostalCode,

@@ -13,8 +13,8 @@ internal sealed class PricesDbContextFactory : IDesignTimeDbContextFactory<Price
     {
         var options = new DbContextOptionsBuilder<PricesDbContext>()
             .UseMySql(
-                "Server=localhost;Port=3306;Database=pricewatch;Uid=root;Pwd=root;",
-                ServerVersion.AutoDetect("Server=localhost;Port=3306;Database=pricewatch;Uid=root;Pwd=root;"),
+                "Server=localhost;Port=3306;Database=pricewatch;Uid=root;Pwd=gescar;",
+                ServerVersion.AutoDetect("Server=localhost;Port=3306;Database=pricewatch;Uid=root;Pwd=gescar;"),
                 mySql => mySql.MigrationsHistoryTable("__ef_migrations_prices"))
             .Options;
 

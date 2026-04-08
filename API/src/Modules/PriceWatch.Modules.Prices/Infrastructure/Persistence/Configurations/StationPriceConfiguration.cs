@@ -57,6 +57,14 @@ internal sealed class StationPriceConfiguration : IEntityTypeConfiguration<Stati
             .HasColumnName("last_updated")
             .IsRequired();
 
+        builder.Property(x => x.BrandId)
+            .HasColumnName("brand_id");
+
+        builder.HasOne(x => x.Brand)
+            .WithMany()
+            .HasForeignKey(x => x.BrandId)
+            .IsRequired(false);
+
         builder.OwnsMany(x => x.FuelPrices, fp =>
         {
             fp.ToTable("prices_fuel_prices");

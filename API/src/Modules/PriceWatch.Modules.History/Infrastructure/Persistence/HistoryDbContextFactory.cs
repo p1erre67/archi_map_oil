@@ -13,8 +13,8 @@ internal sealed class HistoryDbContextFactory : IDesignTimeDbContextFactory<Hist
     {
         var options = new DbContextOptionsBuilder<HistoryDbContext>()
             .UseMySql(
-                "Server=localhost;Database=pricewatch;User=pricewatch;Password=pricewatch;",
-                ServerVersion.AutoDetect("Server=localhost;Database=pricewatch;User=pricewatch;Password=pricewatch;"))
+                "Server=localhost;Database=pricewatch;User=root;Password=gescar;",
+                ServerVersion.AutoDetect("Server=localhost;Database=pricewatch;User=root;Password=gescar;"))
             .Options;
 
         return new HistoryDbContext(options);

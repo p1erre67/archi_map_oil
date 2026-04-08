@@ -18,10 +18,12 @@ internal sealed class PricesDbContext : DbContext, IPricesUnitOfWork
     }
 
     public DbSet<StationPrice> StationPrices => Set<StationPrice>();
+    public DbSet<Brand> Brands => Set<Brand>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         modelBuilder.ApplyConfiguration(new StationPriceConfiguration());
+        modelBuilder.ApplyConfiguration(new BrandConfiguration());
     }
 
     public override async Task<int> SaveChangesAsync(CancellationToken cancellationToken = default)

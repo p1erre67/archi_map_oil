@@ -8,6 +8,7 @@ export function StationCard({ station }: StationCardProps) {
   return (
     <div className="station-card">
       <h3>{station.stationName}</h3>
+      <h5>{station.brandName}</h5>
       <p className="station-location">
         {station.address}, {station.postalCode} {station.city}
       </p>
