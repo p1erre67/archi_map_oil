@@ -36,11 +36,16 @@ public sealed class HistoryEndpoints : IEndpoint
             string fuelType,
             DateTime from,
             DateTime to,
+            string? stationIds,
             ISender sender,
             CancellationToken ct) =>
         {
+            var ids = string.IsNullOrWhiteSpace(stationIds)
+                ? null
+                : stationIds.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+
             var result = await sender.Send(
-                new GetGlobalPriceHistoryQuery(fuelType, from, to), ct);
+                new GetGlobalPriceHistoryQuery(fuelType, from, to, ids), ct);
 
             return result.IsSuccess
                 ? Results.Ok(result.Value)

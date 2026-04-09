@@ -34,10 +34,16 @@ internal sealed class PriceRecordRepository : IPriceRecordRepository
         string fuelType,
         DateTime from,
         DateTime to,
+        IReadOnlyList<string>? stationIds = null,
         CancellationToken cancellationToken = default)
     {
-        return await _context.PriceRecords
-            .Where(r => r.FuelType == fuelType && r.RecordedAt >= from && r.RecordedAt <= to)
+        var query = _context.PriceRecords
+            .Where(r => r.FuelType == fuelType && r.RecordedAt >= from && r.RecordedAt <= to);
+
+        if (stationIds is not null && stationIds.Count > 0)
+            query = query.Where(r => stationIds.Contains(r.ExternalStationId));
+
+        return await query
             .OrderBy(r => r.RecordedAt)
             .ToListAsync(cancellationToken);
     }

@@ -3,7 +3,7 @@
 Suivi des prix des carburants en France. Synchronisation quotidienne depuis l'API gouvernementale, historique des prix, carte interactive.
 
 - **Front** : http://localhost:5173
-- **API (Scalar)** : https://localhost:56819/scalar/v1
+- **API (Scalar)** : https://localhost:5001/scalar/v1
 
 ## Stack
 

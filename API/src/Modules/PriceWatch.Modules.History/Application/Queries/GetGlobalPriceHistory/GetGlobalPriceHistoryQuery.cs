@@ -7,4 +7,5 @@ namespace PriceWatch.Modules.History.Application.Queries.GetGlobalPriceHistory;
 public sealed record GetGlobalPriceHistoryQuery(
     string FuelType,
     DateTime From,
-    DateTime To) : IRequest<Result<IReadOnlyList<GlobalPricePointDto>>>;
+    DateTime To,
+    IReadOnlyList<string>? StationIds = null) : IRequest<Result<IReadOnlyList<GlobalPricePointDto>>>;

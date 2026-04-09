@@ -3,10 +3,11 @@ import { useNearbyStations } from "../hooks/useNearbyStations";
 import { useSyncPrices } from "../hooks/useSyncPrices";
 import { StationCard } from "../components/StationCard";
 import { StationsMap } from "../components/StationsMap";
+import { HistoryView } from "../components/HistoryView";
 import { CityAutocomplete } from "../components/CityAutocomplete";
 import type { City } from "../hooks/useCitySearch";
 
-type ViewTab = "list" | "map";
+type ViewTab = "list" | "map" | "history";
 
 export function StationsPage() {
   const [selectedCity, setSelectedCity] = useState<City | null>(null);
@@ -27,7 +28,7 @@ export function StationsPage() {
 
   return (
     <div className="page">
-      <h1>Stations proches</h1>
+      <h1>PriceWatch</h1>
 
       <div className="filters">
         <label>
@@ -66,6 +67,12 @@ export function StationsPage() {
         >
           Carte
         </button>
+        <button
+          className={`tab ${activeTab === "history" ? "tab-active" : ""}`}
+          onClick={() => setActiveTab("history")}
+        >
+          Evolution
+        </button>
       </div>
 
       {isLoading && <p>Chargement...</p>}
@@ -94,6 +101,14 @@ export function StationsPage() {
 
       {activeTab === "map" && !selectedCity && (
         <p>Selectionnez une ville pour afficher la carte.</p>
+      )}
+
+      {activeTab === "history" && selectedCity && stations && (
+        <HistoryView stations={stations} />
+      )}
+
+      {activeTab === "history" && !selectedCity && (
+        <p>Selectionnez une ville pour afficher l'evolution des prix.</p>
       )}
     </div>
   );

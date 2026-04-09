@@ -23,6 +23,7 @@ internal sealed class GetGlobalPriceHistoryQueryHandler
             request.FuelType,
             request.From,
             request.To,
+            request.StationIds,
             cancellationToken);
 
         // Agrège par date (jour) pour donner une courbe d'évolution globale

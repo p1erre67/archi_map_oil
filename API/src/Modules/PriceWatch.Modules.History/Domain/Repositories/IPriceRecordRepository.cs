@@ -13,6 +13,7 @@ public interface IPriceRecordRepository
         string fuelType,
         DateTime from,
         DateTime to,
+        IReadOnlyList<string>? stationIds = null,
         CancellationToken cancellationToken = default);
 
     void AddRange(IEnumerable<PriceRecord> records);
