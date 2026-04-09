@@ -51,13 +51,16 @@ internal sealed class FuelPriceApiClient : IFuelPriceApiClient
             s.Fuels?.Select(f => new ExternalFuelPriceDto(
                 f.ShortName ?? f.Name ?? "",
                 f.PriceInfo?.Value ?? 0,
-                f.Update?.Value ?? DateTime.UtcNow)).ToList()
+                EnsureUtc(f.Update?.Value ?? DateTime.UtcNow))).ToList()
             ?? [],
             s.Brand?.Id,
             s.Brand?.Name,
             s.Brand?.ShortName,
             s.Brand?.NbStations)).ToList();
     }
+
+    private static DateTime EnsureUtc(DateTime value) =>
+        value.Kind == DateTimeKind.Utc ? value : DateTime.SpecifyKind(value, DateTimeKind.Utc);
 
     private static string ParsePostalCode(string? cityLine) =>
         cityLine is not null && cityLine.Length >= 5 ? cityLine[..5] : "";

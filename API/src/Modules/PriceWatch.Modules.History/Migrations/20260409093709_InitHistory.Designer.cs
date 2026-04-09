@@ -2,9 +2,9 @@
 using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
-using Microsoft.EntityFrameworkCore.Metadata;
 using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
+using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 using PriceWatch.Modules.History.Infrastructure.Persistence;
 
 #nullable disable
@@ -12,7 +12,7 @@ using PriceWatch.Modules.History.Infrastructure.Persistence;
 namespace PriceWatch.Modules.History.Migrations
 {
     [DbContext(typeof(HistoryDbContext))]
-    [Migration("20260408120423_InitHistory")]
+    [Migration("20260409093709_InitHistory")]
     partial class InitHistory
     {
         /// <inheritdoc />
@@ -21,32 +21,32 @@ namespace PriceWatch.Modules.History.Migrations
 #pragma warning disable 612, 618
             modelBuilder
                 .HasAnnotation("ProductVersion", "9.0.3")
-                .HasAnnotation("Relational:MaxIdentifierLength", 64);
+                .HasAnnotation("Relational:MaxIdentifierLength", 63);
 
-            MySqlModelBuilderExtensions.AutoIncrementColumns(modelBuilder);
+            NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
 
             modelBuilder.Entity("PriceWatch.Modules.History.Domain.Entities.PriceRecord", b =>
                 {
                     b.Property<Guid>("Id")
-                        .HasColumnType("char(36)")
+                        .HasColumnType("uuid")
                         .HasColumnName("id");
 
                     b.Property<string>("City")
                         .IsRequired()
                         .HasMaxLength(100)
-                        .HasColumnType("varchar(100)")
+                        .HasColumnType("character varying(100)")
                         .HasColumnName("city");
 
                     b.Property<string>("ExternalStationId")
                         .IsRequired()
                         .HasMaxLength(100)
-                        .HasColumnType("varchar(100)")
+                        .HasColumnType("character varying(100)")
                         .HasColumnName("external_station_id");
 
                     b.Property<string>("FuelType")
                         .IsRequired()
                         .HasMaxLength(20)
-                        .HasColumnType("varchar(20)")
+                        .HasColumnType("character varying(20)")
                         .HasColumnName("fuel_type");
 
                     b.Property<decimal>("PricePerLiter")
@@ -54,13 +54,13 @@ namespace PriceWatch.Modules.History.Migrations
                         .HasColumnName("price_per_liter");
 
                     b.Property<DateTime>("RecordedAt")
-                        .HasColumnType("datetime(6)")
+                        .HasColumnType("timestamp with time zone")
                         .HasColumnName("recorded_at");
 
                     b.Property<string>("StationName")
                         .IsRequired()
                         .HasMaxLength(200)
-                        .HasColumnType("varchar(200)")
+                        .HasColumnType("character varying(200)")
                         .HasColumnName("station_name");
 
                     b.HasKey("Id");

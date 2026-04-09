@@ -18,10 +18,9 @@ public static class DependencyInjection
             ?? throw new InvalidOperationException("Connection string 'PriceWatch' is not configured.");
 
         services.AddDbContext<HistoryDbContext>(options =>
-            options.UseMySql(
+            options.UseNpgsql(
                 connectionString,
-                ServerVersion.AutoDetect(connectionString),
-                mySql => mySql.MigrationsHistoryTable("__ef_migrations_history")));
+                npgsql => npgsql.MigrationsHistoryTable("__ef_migrations_history")));
 
         services.AddScoped<IHistoryUnitOfWork>(sp => sp.GetRequiredService<HistoryDbContext>());
         services.AddScoped<IPriceRecordRepository, PriceRecordRepository>();

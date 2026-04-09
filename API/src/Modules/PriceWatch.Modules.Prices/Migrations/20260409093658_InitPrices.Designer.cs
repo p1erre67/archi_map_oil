@@ -2,9 +2,9 @@
 using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
-using Microsoft.EntityFrameworkCore.Metadata;
 using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
+using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 using PriceWatch.Modules.Prices.Infrastructure.Persistence;
 
 #nullable disable
@@ -12,7 +12,7 @@ using PriceWatch.Modules.Prices.Infrastructure.Persistence;
 namespace PriceWatch.Modules.Prices.Migrations
 {
     [DbContext(typeof(PricesDbContext))]
-    [Migration("20260408120111_InitPrices")]
+    [Migration("20260409093658_InitPrices")]
     partial class InitPrices
     {
         /// <inheritdoc />
@@ -21,59 +21,92 @@ namespace PriceWatch.Modules.Prices.Migrations
 #pragma warning disable 612, 618
             modelBuilder
                 .HasAnnotation("ProductVersion", "9.0.3")
-                .HasAnnotation("Relational:MaxIdentifierLength", 64);
+                .HasAnnotation("Relational:MaxIdentifierLength", 63);
 
-            MySqlModelBuilderExtensions.AutoIncrementColumns(modelBuilder);
+            NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
+
+            modelBuilder.Entity("PriceWatch.Modules.Prices.Domain.Entities.Brand", b =>
+                {
+                    b.Property<int>("ExternalId")
+                        .HasColumnType("integer")
+                        .HasColumnName("id");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasColumnName("name");
+
+                    b.Property<int>("NbStations")
+                        .HasColumnType("integer")
+                        .HasColumnName("nb_stations");
+
+                    b.Property<string>("ShortName")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)")
+                        .HasColumnName("short_name");
+
+                    b.HasKey("ExternalId");
+
+                    b.ToTable("prices_brands", (string)null);
+                });
 
             modelBuilder.Entity("PriceWatch.Modules.Prices.Domain.Entities.StationPrice", b =>
                 {
                     b.Property<Guid>("Id")
-                        .HasColumnType("char(36)")
+                        .HasColumnType("uuid")
                         .HasColumnName("id");
 
                     b.Property<string>("Address")
                         .IsRequired()
                         .HasMaxLength(300)
-                        .HasColumnType("varchar(300)")
+                        .HasColumnType("character varying(300)")
                         .HasColumnName("address");
+
+                    b.Property<int?>("BrandId")
+                        .HasColumnType("integer")
+                        .HasColumnName("brand_id");
 
                     b.Property<string>("City")
                         .IsRequired()
                         .HasMaxLength(100)
-                        .HasColumnType("varchar(100)")
+                        .HasColumnType("character varying(100)")
                         .HasColumnName("city");
 
                     b.Property<string>("ExternalStationId")
                         .IsRequired()
                         .HasMaxLength(100)
-                        .HasColumnType("varchar(100)")
+                        .HasColumnType("character varying(100)")
                         .HasColumnName("external_station_id");
 
                     b.Property<DateTime>("LastUpdated")
-                        .HasColumnType("datetime(6)")
+                        .HasColumnType("timestamp with time zone")
                         .HasColumnName("last_updated");
 
                     b.Property<double>("Latitude")
-                        .HasColumnType("double")
+                        .HasColumnType("double precision")
                         .HasColumnName("latitude");
 
                     b.Property<double>("Longitude")
-                        .HasColumnType("double")
+                        .HasColumnType("double precision")
                         .HasColumnName("longitude");
 
                     b.Property<string>("PostalCode")
                         .IsRequired()
                         .HasMaxLength(10)
-                        .HasColumnType("varchar(10)")
+                        .HasColumnType("character varying(10)")
                         .HasColumnName("postal_code");
 
                     b.Property<string>("StationName")
                         .IsRequired()
                         .HasMaxLength(200)
-                        .HasColumnType("varchar(200)")
+                        .HasColumnType("character varying(200)")
                         .HasColumnName("station_name");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("BrandId");
 
                     b.HasIndex("ExternalStationId")
                         .IsUnique();
@@ -83,19 +116,23 @@ namespace PriceWatch.Modules.Prices.Migrations
 
             modelBuilder.Entity("PriceWatch.Modules.Prices.Domain.Entities.StationPrice", b =>
                 {
+                    b.HasOne("PriceWatch.Modules.Prices.Domain.Entities.Brand", "Brand")
+                        .WithMany()
+                        .HasForeignKey("BrandId");
+
                     b.OwnsMany("PriceWatch.Modules.Prices.Domain.Entities.FuelPrice", "FuelPrices", b1 =>
                         {
                             b1.Property<int>("id")
                                 .ValueGeneratedOnAdd()
-                                .HasColumnType("int")
+                                .HasColumnType("integer")
                                 .HasColumnName("id");
 
-                            MySqlPropertyBuilderExtensions.UseMySqlIdentityColumn(b1.Property<int>("id"));
+                            NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b1.Property<int>("id"));
 
                             b1.Property<string>("FuelType")
                                 .IsRequired()
                                 .HasMaxLength(20)
-                                .HasColumnType("varchar(20)")
+                                .HasColumnType("character varying(20)")
                                 .HasColumnName("fuel_type");
 
                             b1.Property<decimal>("PricePerLiter")
@@ -103,11 +140,11 @@ namespace PriceWatch.Modules.Prices.Migrations
                                 .HasColumnName("price_per_liter");
 
                             b1.Property<DateTime>("UpdatedAt")
-                                .HasColumnType("datetime(6)")
+                                .HasColumnType("timestamp with time zone")
                                 .HasColumnName("updated_at");
 
                             b1.Property<Guid>("station_price_id")
-                                .HasColumnType("char(36)");
+                                .HasColumnType("uuid");
 
                             b1.HasKey("id");
 
@@ -118,6 +155,8 @@ namespace PriceWatch.Modules.Prices.Migrations
                             b1.WithOwner()
                                 .HasForeignKey("station_price_id");
                         });
+
+                    b.Navigation("Brand");
 
                     b.Navigation("FuelPrices");
                 });

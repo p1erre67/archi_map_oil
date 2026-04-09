@@ -35,9 +35,16 @@ builder.Services.AddMediatR(cfg =>
 builder.Services.AddValidatorsFromAssemblies(ModuleAssemblies());
 
 // ── Background services ───────────────────────────────────────────────────────
+// Le PriceSyncBackgroundService ne tourne qu'en Development.
+// En Production (Azure Container Apps), la sync est déclenchée par un cron GitHub Actions
+// qui appelle POST /api/prices/sync — ça permet le scale-to-zero (0€ de coût).
 builder.Services.Configure<PriceSyncOptions>(
     builder.Configuration.GetSection(PriceSyncOptions.SectionName));
-builder.Services.AddHostedService<PriceSyncBackgroundService>();
+
+if (builder.Environment.IsDevelopment())
+{
+    builder.Services.AddHostedService<PriceSyncBackgroundService>();
+}
 
 // ── App pipeline ──────────────────────────────────────────────────────────────
 var app = builder.Build();

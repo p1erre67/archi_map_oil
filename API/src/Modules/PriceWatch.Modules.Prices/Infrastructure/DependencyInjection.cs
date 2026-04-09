@@ -20,10 +20,9 @@ public static class DependencyInjection
 
         //gestion des connexion et transtaction (UnitOfWork via EF)
         services.AddDbContext<PricesDbContext>(options =>
-            options.UseMySql(
+            options.UseNpgsql(
                 connectionString,
-                ServerVersion.AutoDetect(connectionString),
-                mySql => mySql.MigrationsHistoryTable("__ef_migrations_prices")));
+                npgsql => npgsql.MigrationsHistoryTable("__ef_migrations_prices")));
 
         services.AddScoped<IPricesUnitOfWork>(sp => sp.GetRequiredService<PricesDbContext>());
         services.AddScoped<IStationPriceRepository, StationPriceRepository>();

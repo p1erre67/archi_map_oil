@@ -19,10 +19,14 @@ internal sealed class GetGlobalPriceHistoryQueryHandler
         GetGlobalPriceHistoryQuery request,
         CancellationToken cancellationToken)
     {
+        // Postgres exige des DateTime UTC pour les colonnes timestamptz
+        var fromUtc = DateTime.SpecifyKind(request.From, DateTimeKind.Utc);
+        var toUtc = DateTime.SpecifyKind(request.To, DateTimeKind.Utc);
+
         var records = await _repository.GetGlobalAveragesAsync(
             request.FuelType,
-            request.From,
-            request.To,
+            fromUtc,
+            toUtc,
             request.StationIds,
             cancellationToken);
 

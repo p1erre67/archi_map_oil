@@ -7,4 +7,22 @@ dotnet ef migrations add AddBrands --project src/Modules/PriceWatch.Modules.Pric
 dotnet ef database update --project src/Modules/PriceWatch.Modules.Prices --startup-project src/PriceWatch.Api
 dotnet ef database update --project src/Modules/PriceWatch.Modules.History --startup-project src/PriceWatch.Api 
 
+dotnet user-secrets init --project src/PriceWatch.Api
+dotnet user-secrets set "ConnectionStrings:PriceWatch" "Host=db.xxx.supabase.co;..." --project src/PriceWatch.Api
+
+************AZURE*************************
+1. Tu modifies du code dans API/
+2. dotnet build (validation locale)
+3. docker build -t pricewatchacr29728.azurecr.io/pricewatch-api:latest -f src/PriceWatch.Api/Dockerfile .
+4. docker push pricewatchacr29728.azurecr.io/pricewatch-api:latest
+5. az containerapp update --name pricewatch-api --resource-group pricewatch-rg --image pricewatchacr29728.azurecr.io/pricewatch-api:latest
+   → Azure pull la nouvelle image et redémarre le container avec une rolling update
+******************************************
+
+
+dotnet user-secrets list --project src/PriceWatch.Api				Lister tous les secrets
+dotnet user-secrets set "Cle:SousCle" "valeur" --project src/PriceWatch.Api	Ajouter/modifier
+dotnet user-secrets remove "Cle:SousCle" --project src/PriceWatch.Api		Supprimer une clé
+dotnet user-secrets clear --project src/PriceWatch.Api				Tout supprimer
+dotnet user-secrets init --project src/PriceWatch.Api				Initialiser (génère le <UserSecretsId>)
 

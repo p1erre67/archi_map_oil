@@ -35,7 +35,7 @@ internal sealed class RecordPricesOnSyncHandler : INotificationHandler<StationPr
                     station.City,
                     fuel.FuelType,
                     fuel.PricePerLiter,
-                    fuel.UpdatedAt)))
+                    EnsureUtc(fuel.UpdatedAt))))
             .ToList();
 
         _repository.AddRange(records);
@@ -46,4 +46,9 @@ internal sealed class RecordPricesOnSyncHandler : INotificationHandler<StationPr
             records.Count,
             notification.EventId);
     }
+
+    private static DateTime EnsureUtc(DateTime value) =>
+        value.Kind == DateTimeKind.Utc
+            ? value
+            : DateTime.SpecifyKind(value, DateTimeKind.Utc);
 }

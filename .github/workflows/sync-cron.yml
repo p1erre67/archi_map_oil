@@ -1,0 +1,22 @@
+name: Daily Price Sync
+
+# Déclenche un POST /api/prices/sync sur l'API en production une fois par jour.
+# Ça remplace le PriceSyncBackgroundService qui ne tourne plus en prod
+# (pour permettre le scale-to-zero d'Azure Container Apps → 0 € de coût).
+
+on:
+  schedule:
+    # Tous les jours à 06:00 UTC (08:00 Paris été / 07:00 hiver)
+    - cron: "0 6 * * *"
+  workflow_dispatch:  # Permet aussi un déclenchement manuel depuis GitHub UI
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger price sync on Azure
+        run: |
+          curl -fsSL -X POST \
+            -H "Content-Type: application/json" \
+            -d '{"latitude": 48.8566, "longitude": 2.3522, "radiusKm": 5}' \
+            "${{ secrets.API_BASE_URL }}/api/prices/sync"

@@ -1,0 +1,15 @@
+**/bin
+**/obj
+**/.vs
+**/.vscode
+**/.idea
+**/*.user
+**/*.suo
+**/.git
+**/.gitignore
+**/.dockerignore
+**/Dockerfile
+**/node_modules
+**/dist
+**/.vite
+tests/

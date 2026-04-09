@@ -11,30 +11,22 @@ namespace PriceWatch.Modules.History.Migrations
         /// <inheritdoc />
         protected override void Up(MigrationBuilder migrationBuilder)
         {
-            migrationBuilder.AlterDatabase()
-                .Annotation("MySql:CharSet", "utf8mb4");
-
             migrationBuilder.CreateTable(
                 name: "history_price_records",
                 columns: table => new
                 {
-                    id = table.Column<Guid>(type: "char(36)", nullable: false, collation: "ascii_general_ci"),
-                    external_station_id = table.Column<string>(type: "varchar(100)", maxLength: 100, nullable: false)
-                        .Annotation("MySql:CharSet", "utf8mb4"),
-                    station_name = table.Column<string>(type: "varchar(200)", maxLength: 200, nullable: false)
-                        .Annotation("MySql:CharSet", "utf8mb4"),
-                    city = table.Column<string>(type: "varchar(100)", maxLength: 100, nullable: false)
-                        .Annotation("MySql:CharSet", "utf8mb4"),
-                    fuel_type = table.Column<string>(type: "varchar(20)", maxLength: 20, nullable: false)
-                        .Annotation("MySql:CharSet", "utf8mb4"),
-                    price_per_liter = table.Column<decimal>(type: "decimal(8,3)", nullable: false),
-                    recorded_at = table.Column<DateTime>(type: "datetime(6)", nullable: false)
+                    id = table.Column<Guid>(type: "uuid", nullable: false),
+                    external_station_id = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: false),
+                    station_name = table.Column<string>(type: "character varying(200)", maxLength: 200, nullable: false),
+                    city = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: false),
+                    fuel_type = table.Column<string>(type: "character varying(20)", maxLength: 20, nullable: false),
+                    price_per_liter = table.Column<decimal>(type: "numeric(8,3)", nullable: false),
+                    recorded_at = table.Column<DateTime>(type: "timestamp with time zone", nullable: false)
                 },
                 constraints: table =>
                 {
                     table.PrimaryKey("PK_history_price_records", x => x.id);
-                })
-                .Annotation("MySql:CharSet", "utf8mb4");
+                });
 
             migrationBuilder.CreateIndex(
                 name: "IX_history_price_records_external_station_id",
@@ -42,7 +34,7 @@ namespace PriceWatch.Modules.History.Migrations
                 column: "external_station_id");
 
             migrationBuilder.CreateIndex(
-                name: "IX_history_price_records_external_station_id_fuel_type_recorded~",
+                name: "IX_history_price_records_external_station_id_fuel_type_recorde~",
                 table: "history_price_records",
                 columns: new[] { "external_station_id", "fuel_type", "recorded_at" });
 

@@ -1,18 +1,17 @@
 services:
-  mariadb:
-    image: mariadb:11.4
+  postgres:
+    image: postgres:16
     container_name: pricewatch-db
     environment:
-      MYSQL_ROOT_PASSWORD: root
-      MYSQL_DATABASE: pricewatch
-      MYSQL_USER: pricewatch
-      MYSQL_PASSWORD: pricewatch
+      POSTGRES_DB: pricewatch
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: gescar
     ports:
-      - "3306:3306"
+      - "5432:5432"
     volumes:
-      - mariadb_data:/var/lib/mysql
+      - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -24,12 +23,12 @@ services:
     container_name: pricewatch-api
     environment:
       - ASPNETCORE_ENVIRONMENT=Development
-      - ConnectionStrings__PriceWatch=Server=mariadb;Port=3306;Database=pricewatch;User=pricewatch;Password=pricewatch;
+      - ConnectionStrings__PriceWatch=Host=postgres;Port=5432;Database=pricewatch;Username=postgres;Password=gescar
     ports:
       - "5000:8080"
     depends_on:
-      mariadb:
+      postgres:
         condition: service_healthy
 
 volumes:
-  mariadb_data:
+  postgres_data:
