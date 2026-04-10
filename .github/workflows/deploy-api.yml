@@ -1,0 +1,43 @@
+name: Deploy API
+
+# Se déclenche au push sur master quand un fichier dans API/ change.
+# Build l'image Docker, la push vers Azure Container Registry,
+# puis met à jour la Container App.
+
+on:
+  push:
+    branches: [master]
+    paths:
+      - "API/**"
+  workflow_dispatch: # Déclenchement manuel possible
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Login to Azure
+        uses: azure/login@v2
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+      - name: Login to ACR
+        run: az acr login --name ${{ secrets.ACR_NAME }}
+
+      - name: Build and push Docker image
+        working-directory: API
+        run: |
+          docker build -t ${{ secrets.ACR_NAME }}.azurecr.io/pricewatch-api:${{ github.sha }} \
+                       -t ${{ secrets.ACR_NAME }}.azurecr.io/pricewatch-api:latest \
+                       -f src/PriceWatch.Api/Dockerfile .
+          docker push ${{ secrets.ACR_NAME }}.azurecr.io/pricewatch-api --all-tags
+
+      - name: Deploy to Azure Container Apps
+        run: |
+          az containerapp update \
+            --name pricewatch-api \
+            --resource-group pricewatch-rg \
+            --image ${{ secrets.ACR_NAME }}.azurecr.io/pricewatch-api:${{ github.sha }}
