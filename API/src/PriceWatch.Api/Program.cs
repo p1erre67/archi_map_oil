@@ -22,6 +22,20 @@ builder.Services.AddOpenApi();
 // ── Problem Details ───────────────────────────────────────────────────────────
 builder.Services.AddProblemDetails();
 
+// ── CORS ──────────────────────────────────────────────────────────────────────
+var allowedOrigins = builder.Configuration.GetSection("Cors:AllowedOrigins").Get<string[]>()
+    ?? [];
+
+builder.Services.AddCors(options =>
+{
+    options.AddDefaultPolicy(policy =>
+    {
+        policy.WithOrigins(allowedOrigins)
+            .AllowAnyHeader()
+            .AllowAnyMethod();
+    });
+});
+
 // ── Modules ───────────────────────────────────────────────────────────────────
 builder.Services.AddPricesModule(builder.Configuration);
 builder.Services.AddHistoryModule(builder.Configuration);
@@ -58,6 +72,7 @@ if (app.Environment.IsDevelopment())
         .WithDefaultHttpClient(ScalarTarget.CSharp, ScalarClient.HttpClient));
 }
 
+app.UseCors();
 app.UseSerilogRequestLogging();
 
 app.MapModuleEndpoints([..ModuleAssemblies()]);// = WebApplicationExtensions.MapModuleEndpoints(app,[..ModuleAssemblies()]);

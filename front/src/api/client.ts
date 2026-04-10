@@ -1,4 +1,8 @@
-const BASE_URL = "/api";
+// En dev : "/api" (Vite proxy vers localhost)
+// En prod : "https://pricewatch-api.xxx.azurecontainerapps.io/api" (variable d'env Vercel)
+const BASE_URL = import.meta.env.VITE_API_BASE_URL
+  ? `${import.meta.env.VITE_API_BASE_URL}/api`
+  : "/api";
 
 export async function fetchApi<T>(path: string): Promise<T> {
   const response = await fetch(`${BASE_URL}${path}`);

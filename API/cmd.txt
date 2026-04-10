@@ -11,6 +11,8 @@ dotnet user-secrets init --project src/PriceWatch.Api
 dotnet user-secrets set "ConnectionStrings:PriceWatch" "Host=db.xxx.supabase.co;..." --project src/PriceWatch.Api
 
 ************AZURE*************************
+az login
+az acr login --name pricewatchacr29728
 1. Tu modifies du code dans API/
 2. dotnet build (validation locale)
 3. docker build -t pricewatchacr29728.azurecr.io/pricewatch-api:latest -f src/PriceWatch.Api/Dockerfile .
