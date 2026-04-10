@@ -2,41 +2,84 @@
 
 Suivi des prix des carburants en France. Synchronisation quotidienne depuis l'API gouvernementale, historique des prix, carte interactive.
 
-- **Front** : http://localhost:5173
-- **API (Scalar)** : https://localhost:5001/scalar/v1
+## URLs
+
+| Environnement | URL |
+|---|---|
+| Front (Vercel) | https://archi-map-oil.vercel.app |
+| API (Azure Container Apps) | https://pricewatch-api.purpleflower-11ac4ef6.westeurope.azurecontainerapps.io |
+| API locale (Scalar) | https://localhost:5001/scalar/v1 |
 
 ## Stack
 
 | Couche | Techno |
 |--------|--------|
 | API | .NET 10, Minimal APIs, MediatR, EF Core |
-| BDD | MariaDB 11.4 |
+| BDD | PostgreSQL (Supabase) |
 | Front | React 19, TypeScript, Vite, Leaflet |
+| CI/CD | GitHub Actions |
+| Hosting API | Azure Container Apps (scale-to-zero) |
+| Hosting Front | Vercel |
 
 Architecture : monolithe modulaire, Clean Architecture, CQRS.
+
+## Architecture cloud
+
+```
+┌─────────────────────────┐
+│  Vercel (front React)   │
+│  archi-map-oil.vercel   │
+└───────────┬─────────────┘
+            │ HTTPS
+            ▼
+┌─────────────────────────┐
+│  Azure Container Apps   │
+│  pricewatch-api         │
+│  scale 0-1, free tier   │
+└───────────┬─────────────┘
+            │ SSL
+            ▼
+┌─────────────────────────┐
+│  Supabase (PostgreSQL)  │
+│  Session Pooler IPv4    │
+└─────────────────────────┘
+```
+
+## CI/CD
+
+| Workflow | Declencheur | Action |
+|---|---|---|
+| `deploy-api.yml` | Push sur master (fichiers `API/`) | Build Docker, push ACR, update Container App |
+| `sync-cron.yml` | Cron quotidien 06:00 UTC | POST /api/prices/sync sur l'API en prod |
+
+Le front est deploye automatiquement par Vercel a chaque push sur master.
 
 ## Modules
 
 - **Prices** : stations, marques, prix carburants, synchro API gouv
 - **History** : historique des prix pour le suivi d'evolution
 
-## Lancer le projet
+## Lancer en local
 
 ```bash
-# BDD
-docker-compose up -d mariadb
-
-# API
+# Configurer la connection string (une seule fois)
 cd API
+dotnet user-secrets set "ConnectionStrings:PriceWatch" "Host=localhost;Port=5432;Database=pricewatch;Username=postgres;Password=xxx"
+
+# Migrations
 dotnet ef database update --project src/Modules/PriceWatch.Modules.Prices --startup-project src/PriceWatch.Api
 dotnet ef database update --project src/Modules/PriceWatch.Modules.History --startup-project src/PriceWatch.Api
+
+# API
 dotnet run --project src/PriceWatch.Api
 
 # Front
-cd front
+cd ../front
 npm install
 npm run dev
 ```
+
+En local, le background service synchronise les prix automatiquement (toutes les 24h). En production, c'est un cron GitHub Actions qui appelle l'endpoint sync (pour permettre le scale-to-zero).
 
 ## MCD
 
@@ -110,4 +153,4 @@ npm run dev
 | Methode | Route | Description |
 |---------|-------|-------------|
 | GET | `/api/history/station/{externalStationId}` | Historique d'une station |
-| GET | `/api/history/global?fuelType&from&to` | Evolution globale des prix |
+| GET | `/api/history/global?fuelType&from&to&stationIds` | Evolution des prix (filtrable par stations) |
