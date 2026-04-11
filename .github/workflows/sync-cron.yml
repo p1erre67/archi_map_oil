@@ -18,19 +18,19 @@ jobs:
         run: |
           curl -fsSL -X POST \
             -H "Content-Type: application/json" \
-            -d '{"latitude": 48.8566, "longitude": 2.3522, "radiusKm": 10}' \
+            -d '{"latitude": 48.8566, "longitude": 2.3522, "radiusKm": 8}' \
             "${{ secrets.API_BASE_URL }}/api/prices/sync"
 
       - name: Sync Strasbourg
         run: |
           curl -fsSL -X POST \
             -H "Content-Type: application/json" \
-            -d '{"latitude": 48.5734, "longitude": 7.7521, "radiusKm": 10}' \
+            -d '{"latitude": 48.5734, "longitude": 7.7521, "radiusKm": 8}' \
             "${{ secrets.API_BASE_URL }}/api/prices/sync"
 
       - name: Sync Auxerre
         run: |
           curl -fsSL -X POST \
             -H "Content-Type: application/json" \
-            -d '{"latitude": 47.7979, "longitude": 3.5714, "radiusKm": 10}' \
+            -d '{"latitude": 47.7979, "longitude": 3.5714, "radiusKm": 8}' \
             "${{ secrets.API_BASE_URL }}/api/prices/sync"
