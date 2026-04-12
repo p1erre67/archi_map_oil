@@ -12,8 +12,33 @@ on:
   workflow_dispatch: # Déclenchement manuel possible
 
 jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "10.0.x"
+
+      - name: Restore dependencies
+        working-directory: API
+        run: dotnet restore
+
+      - name: Build
+        working-directory: API
+        run: dotnet build --no-restore
+
+      - name: Run unit tests
+        working-directory: API
+        run: dotnet test --no-build --filter "FullyQualifiedName~UnitTests"
+
   deploy:
     runs-on: ubuntu-latest
+    needs: test
 
     steps:
       - name: Checkout code
