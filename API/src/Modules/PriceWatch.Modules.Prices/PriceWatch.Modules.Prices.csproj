@@ -23,6 +23,7 @@
   <ItemGroup>
     <InternalsVisibleTo Include="PriceWatch.IntegrationTests" />
     <InternalsVisibleTo Include="PriceWatch.ArchitectureTests" />
+    <InternalsVisibleTo Include="PriceWatch.UnitTests" />
   </ItemGroup>
 
 </Project>

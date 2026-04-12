@@ -154,3 +154,168 @@ En local, le background service synchronise les prix automatiquement (toutes les
 |---------|-------|-------------|
 | GET | `/api/history/station/{externalStationId}` | Historique d'une station |
 | GET | `/api/history/global?fuelType&from&to&stationIds` | Evolution des prix (filtrable par stations) |
+
+## Pour aller plus loin : scalabilite des events
+
+### Situation actuelle (in-process synchrone)
+
+Les Domain Events sont dispatches par MediatR dans le meme processus, de maniere synchrone, apres le `SaveChangesAsync` :
+
+```
+HTTP Request
+  └─ SyncStationPricesCommandHandler
+       └─ StationPrice.MarkAsSynced()          ← aggregate leve l'event
+       └─ PricesDbContext.SaveChangesAsync()
+            ├─ INSERT INTO station_prices       ← persistance
+            └─ MediatR.Publish(DomainEvent)     ← dispatch synchrone
+                 ├─ LogHandler
+                 ├─ DetectAnomalyHandler
+                 └─ PublishIntegrationEventHandler
+                      └─ MediatR.Publish(IntegrationEvent)
+                           └─ RecordPricesOnSyncHandler
+                                └─ HistoryDbContext.SaveChangesAsync()
+```
+
+Limites :
+- Si l'app crash entre le save Prices et le dispatch : events perdus
+- Si un handler echoue : pas de retry, les handlers suivants ne s'executent pas
+- Tout est synchrone : la requete HTTP attend la fin de toute la chaine
+
+---
+
+### Niveau 2 — Outbox Pattern + Background Worker
+
+L'Outbox garantit qu'un event n'est jamais perdu en l'inserant dans la meme transaction que les donnees metier.
+
+**1. Table `outbox_messages`** dans le schema du module Prices :
+
+```sql
+CREATE TABLE prices_outbox_messages (
+    id              UUID PRIMARY KEY,
+    event_type      VARCHAR(500)  NOT NULL,
+    payload         JSONB         NOT NULL,
+    created_at      TIMESTAMPTZ   NOT NULL,
+    processed_at    TIMESTAMPTZ   NULL        -- NULL = pas encore traite
+);
+```
+
+**2. `SaveChangesAsync` insere les events dans l'outbox** (meme transaction) :
+
+```csharp
+public override async Task<int> SaveChangesAsync(CancellationToken ct = default)
+{
+    var events = ChangeTracker.Entries()
+        .Where(e => e.Entity is IHasDomainEvents)
+        .SelectMany(e => ((IHasDomainEvents)e.Entity).DomainEvents)
+        .ToList();
+
+    foreach (var domainEvent in events)
+    {
+        OutboxMessages.Add(new OutboxMessage
+        {
+            Id = Guid.NewGuid(),
+            EventType = domainEvent.GetType().AssemblyQualifiedName!,
+            Payload = JsonSerializer.Serialize(domainEvent, domainEvent.GetType()),
+            CreatedAt = DateTime.UtcNow
+        });
+    }
+
+    // Donnees + outbox dans la MEME transaction
+    return await base.SaveChangesAsync(ct);
+}
+```
+
+**3. Background worker** lit les messages non traites et les publie :
+
+```csharp
+public class OutboxProcessor : BackgroundService
+{
+    protected override async Task ExecuteAsync(CancellationToken ct)
+    {
+        while (!ct.IsCancellationRequested)
+        {
+            using var scope = _serviceScopeFactory.CreateScope();
+            var dbContext = scope.ServiceProvider.GetRequiredService<PricesDbContext>();
+            var publisher = scope.ServiceProvider.GetRequiredService<IPublisher>();
+
+            var messages = await dbContext.OutboxMessages
+                .Where(m => m.ProcessedAt == null)
+                .OrderBy(m => m.CreatedAt)
+                .Take(20)
+                .ToListAsync(ct);
+
+            foreach (var message in messages)
+            {
+                var eventType = Type.GetType(message.EventType)!;
+                var domainEvent = JsonSerializer.Deserialize(message.Payload, eventType)!;
+                await publisher.Publish(domainEvent, ct);
+                message.ProcessedAt = DateTime.UtcNow;
+            }
+
+            await dbContext.SaveChangesAsync(ct);
+            await Task.Delay(TimeSpan.FromSeconds(5), ct);
+        }
+    }
+}
+```
+
+**Flux** :
+
+```
+HTTP Request (rapide — plus d'attente des handlers)
+  └─ SaveChangesAsync()
+       ├─ INSERT INTO station_prices        ← donnees
+       └─ INSERT INTO outbox_messages       ← events (meme transaction)
+
+Background Worker (toutes les 5s)
+  └─ SELECT FROM outbox_messages WHERE processed_at IS NULL
+       └─ MediatR.Publish(event)
+       └─ UPDATE outbox_messages SET processed_at = NOW()
+```
+
+---
+
+### Niveau 3 — Outbox + Message Broker (RabbitMQ / Azure Service Bus)
+
+Quand le monolithe se decoupe en services independants (ex: le module History devient un microservice), un broker externe remplace MediatR pour la communication inter-services.
+
+Avec **MassTransit + RabbitMQ** :
+
+```csharp
+// Le worker outbox publie vers le broker au lieu de MediatR
+await publishEndpoint.Publish(domainEvent);  // MassTransit → RabbitMQ
+
+// Le module History consomme depuis le broker
+public class RecordPricesConsumer : IConsumer<StationPricesSyncedIntegrationEvent>
+{
+    public async Task Consume(ConsumeContext<StationPricesSyncedIntegrationEvent> context)
+    {
+        // Meme logique que RecordPricesOnSyncHandler actuel
+    }
+}
+```
+
+**Flux** :
+
+```
+Service Prices                          Service History
+  └─ SaveChanges + Outbox                (processus separe)
+       ↓
+  └─ Worker lit outbox
+       └─ Publish → [ RabbitMQ ] → Consumer
+                                      └─ RecordPricesConsumer
+                                           └─ HistoryDbContext.Save
+```
+
+---
+
+### Comparatif
+
+| | Actuel | Outbox (niveau 2) | Broker (niveau 3) |
+|---|---|---|---|
+| Durabilite | Events perdus si crash | Persistes en DB | Persistes en DB + broker |
+| Retry | Non | Oui (worker relit) | Oui (broker + dead-letter) |
+| Performance | Synchrone | Asynchrone | Asynchrone + distribue |
+| Scaling | Monolithe unique | Monolithe unique | Multi-instances |
+| Complexite | Faible | Moyenne | Elevee |
+| Quand | Projet perso / POC | Production mono-instance | Production multi-services |
