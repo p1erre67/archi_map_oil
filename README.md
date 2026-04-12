@@ -314,8 +314,7 @@ Service Prices                          Service History
 | | Actuel | Outbox (niveau 2) | Broker (niveau 3) |
 |---|---|---|---|
 | Durabilite | Events perdus si crash | Persistes en DB | Persistes en DB + broker |
-| Retry | Non | Oui (worker relit) | Oui (broker + dead-letter) |
+| Retry | Non | Oui (worker relit) | Oui (broker) |
 | Performance | Synchrone | Asynchrone | Asynchrone + distribue |
 | Scaling | Monolithe unique | Monolithe unique | Multi-instances |
 | Complexite | Faible | Moyenne | Elevee |
-| Quand | Projet perso / POC | Production mono-instance | Production multi-services |
