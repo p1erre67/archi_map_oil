@@ -26,7 +26,8 @@
     "plugins": [
       "expo-router",
       "expo-location",
-      "expo-asset"
+      "expo-asset",
+      "expo-font"
     ],
     "extra": {
       "router": {
