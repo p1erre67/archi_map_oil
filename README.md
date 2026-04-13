@@ -19,6 +19,7 @@ Suivi des prix des carburants en France. Synchronisation quotidienne depuis l'AP
 | Front | React 19, TypeScript, Vite, Leaflet |
 | CI/CD | GitHub Actions |
 | Hosting API | Azure Container Apps (scale-to-zero) |
+| Mobile | Expo, React Native, Leaflet (WebView) |
 | Hosting Front | Vercel |
 
 Architecture : monolithe modulaire, Clean Architecture, CQRS.
@@ -80,6 +81,41 @@ npm run dev
 ```
 
 En local, le background service synchronise les prix automatiquement (toutes les 24h). En production, c'est un cron GitHub Actions qui appelle l'endpoint sync (pour permettre le scale-to-zero).
+
+## App mobile (Expo)
+
+### Developpement
+
+```bash
+cd app
+npm install
+npx expo start
+```
+
+Scanner le QR code 
+
+### Build APK (Android)
+
+```bash
+cd app
+npx expo prebuild --clean --platform android
+cd android
+./gradlew assembleRelease
+```
+
+L'APK est genere dans `app/android/app/build/outputs/apk/release/`.
+
+Prerequis : JDK 17+ (`winget install Microsoft.OpenJDK.17`) et Android SDK (`ANDROID_HOME` configure).
+
+### Configuration
+
+Creer un fichier `app/.env` :
+
+```
+EXPO_PUBLIC_API_URL=xxx
+```
+
+La variable est injectee au build. Modifier l'URL necessite un rebuild.
 
 ## MCD
 
