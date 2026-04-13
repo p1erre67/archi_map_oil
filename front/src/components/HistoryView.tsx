@@ -3,7 +3,7 @@ import { useGlobalPriceHistory } from "../hooks/useGlobalPriceHistory";
 import { PriceChart } from "./PriceChart";
 import type { StationPriceDto } from "../types/api";
 
-const FUEL_TYPES = ["Gazole", "SP95", "SP98", "E10", "E85", "GPLc"];
+const FUEL_TYPES = ["Gazole", "SP95", "SP98", "E85", "GPLc"];
 
 interface Props {
   stations: StationPriceDto[];

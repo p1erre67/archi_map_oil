@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using PriceWatch.Modules.History.Domain;
 using PriceWatch.Modules.History.Domain.Entities;
 using PriceWatch.Modules.History.Domain.Repositories;
 using PriceWatch.Modules.History.Infrastructure.Persistence;
@@ -23,7 +24,10 @@ internal sealed class PriceRecordRepository : IPriceRecordRepository
             .Where(r => r.ExternalStationId == externalStationId);
 
         if (fuelType is not null)
-            query = query.Where(r => r.FuelType == fuelType);
+        {
+            var aliases = FuelTypes.Resolve(fuelType);
+            query = query.Where(r => aliases.Contains(r.FuelType));
+        }
 
         return await query
             .OrderBy(r => r.RecordedAt)
@@ -37,8 +41,10 @@ internal sealed class PriceRecordRepository : IPriceRecordRepository
         IReadOnlyList<string>? stationIds = null,
         CancellationToken cancellationToken = default)
     {
+        var aliases = FuelTypes.Resolve(fuelType);
+
         var query = _context.PriceRecords
-            .Where(r => r.FuelType == fuelType && r.RecordedAt >= from && r.RecordedAt <= to);
+            .Where(r => aliases.Contains(r.FuelType) && r.RecordedAt >= from && r.RecordedAt <= to);
 
         if (stationIds is not null && stationIds.Count > 0)
             query = query.Where(r => stationIds.Contains(r.ExternalStationId));

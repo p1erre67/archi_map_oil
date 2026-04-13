@@ -51,6 +51,14 @@ export function StationsMap({ stations, center }: Props) {
                 ))}
               </tbody>
             </table>
+            <a
+              href={`https://www.google.com/maps/dir/?api=1&destination=${station.latitude},${station.longitude}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="directions-link"
+            >
+              Itineraire
+            </a>
           </Popup>
         </Marker>
       ))}

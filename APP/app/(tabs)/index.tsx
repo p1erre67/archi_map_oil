@@ -12,10 +12,14 @@ import * as Location from "expo-location";
 import { useNearbyStations } from "../../src/hooks/useNearbyStations";
 import { useSyncPrices } from "../../src/hooks/useSyncPrices";
 import { StationCard } from "../../src/components/StationCard";
+import { CityPickerModal } from "../../src/components/CityPickerModal";
+import type { City } from "../../src/hooks/useCitySearch";
 
 export default function StationsScreen() {
-  const [location, setLocation] = useState<{ lat: number; lng: number } | null>(null);
+  const [userLocation, setUserLocation] = useState<{ lat: number; lng: number } | null>(null);
+  const [selectedCity, setSelectedCity] = useState<City | null>(null);
   const [radiusKm, setRadiusKm] = useState(5);
+  const [pickerVisible, setPickerVisible] = useState(false);
 
   useEffect(() => {
     (async () => {
@@ -28,22 +32,27 @@ export default function StationsScreen() {
         return;
       }
       const loc = await Location.getCurrentPositionAsync({});
-      setLocation({ lat: loc.coords.latitude, lng: loc.coords.longitude });
+      setUserLocation({ lat: loc.coords.latitude, lng: loc.coords.longitude });
     })();
   }, []);
 
+  // Si une ville est sélectionnée, on utilise ses coordonnées ; sinon celles du device
+  const activeLat = selectedCity?.latitude ?? userLocation?.lat ?? 0;
+  const activeLng = selectedCity?.longitude ?? userLocation?.lng ?? 0;
+  const locationReady = selectedCity !== null || userLocation !== null;
+
   const { data: stations, isLoading, error, refetch } = useNearbyStations(
-    location?.lat ?? 0,
-    location?.lng ?? 0,
+    activeLat,
+    activeLng,
     radiusKm
   );
 
   const sync = useSyncPrices();
 
   function handleSync() {
-    if (!location) return;
+    if (!locationReady) return;
     sync.mutate(
-      { latitude: location.lat, longitude: location.lng, radiusKm },
+      { latitude: activeLat, longitude: activeLng, radiusKm },
       {
         onSuccess: (data) => Alert.alert("Sync", data.message),
         onError: (err) => Alert.alert("Erreur", err.message),
@@ -51,7 +60,7 @@ export default function StationsScreen() {
     );
   }
 
-  if (!location) {
+  if (!locationReady) {
     return (
       <View style={styles.centered}>
         <ActivityIndicator size="large" color="#2563eb" />
@@ -62,9 +71,28 @@ export default function StationsScreen() {
 
   return (
     <View style={styles.container}>
+      <View style={styles.locationBar}>
+        <View style={styles.locationInfo}>
+          <Text style={styles.locationLabel}>
+            {selectedCity ? selectedCity.nom : "Ma position"}
+          </Text>
+          {selectedCity && (
+            <TouchableOpacity onPress={() => setSelectedCity(null)}>
+              <Text style={styles.resetBtn}>Reinitialiser</Text>
+            </TouchableOpacity>
+          )}
+        </View>
+        <TouchableOpacity
+          style={styles.pickerBtn}
+          onPress={() => setPickerVisible(true)}
+        >
+          <Text style={styles.pickerBtnText}>+ Ville</Text>
+        </TouchableOpacity>
+      </View>
+
       <View style={styles.toolbar}>
         <View style={styles.radiusSelector}>
-          {[5, 10, 20].map((r) => (
+          {[5, 10].map((r) => (
             <TouchableOpacity
               key={r}
               style={[styles.radiusBtn, radiusKm === r && styles.radiusBtnActive]}
@@ -118,6 +146,12 @@ export default function StationsScreen() {
           }
         />
       )}
+
+      <CityPickerModal
+        visible={pickerVisible}
+        onClose={() => setPickerVisible(false)}
+        onSelect={setSelectedCity}
+      />
     </View>
   );
 }
@@ -137,6 +171,44 @@ const styles = StyleSheet.create({
     marginTop: 12,
     color: "#666",
     fontSize: 14,
+  },
+  locationBar: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    padding: 12,
+    backgroundColor: "#fff",
+    borderBottomWidth: 1,
+    borderBottomColor: "#e2e8f0",
+  },
+  locationInfo: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+  },
+  locationLabel: {
+    fontSize: 15,
+    fontWeight: "600",
+    color: "#0f172a",
+  },
+  resetBtn: {
+    fontSize: 12,
+    color: "#64748b",
+    textDecorationLine: "underline",
+  },
+  pickerBtn: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 6,
+    backgroundColor: "#eff6ff",
+    borderWidth: 1,
+    borderColor: "#bfdbfe",
+  },
+  pickerBtnText: {
+    color: "#2563eb",
+    fontSize: 13,
+    fontWeight: "600",
   },
   toolbar: {
     flexDirection: "row",

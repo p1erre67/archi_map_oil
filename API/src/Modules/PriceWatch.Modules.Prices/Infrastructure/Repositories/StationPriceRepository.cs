@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using PriceWatch.Modules.Prices.Domain;
 using PriceWatch.Modules.Prices.Domain.Entities;
 using PriceWatch.Modules.Prices.Domain.Repositories;
 using PriceWatch.Modules.Prices.Infrastructure.Persistence;
@@ -48,12 +49,14 @@ internal sealed class StationPriceRepository : IStationPriceRepository
         int limit,
         CancellationToken cancellationToken = default)
     {
+        var aliases = FuelTypes.Resolve(fuelType);
+
         return await _context.StationPrices
             .Include(s => s.FuelPrices)
             .Include(s => s.Brand)
-            .Where(s => s.FuelPrices.Any(fp => fp.FuelType == fuelType))
+            .Where(s => s.FuelPrices.Any(fp => aliases.Contains(fp.FuelType)))
             .OrderBy(s => s.FuelPrices
-                .Where(fp => fp.FuelType == fuelType)
+                .Where(fp => aliases.Contains(fp.FuelType))
                 .Select(fp => fp.PricePerLiter)
                 .Min())
             .Take(limit)

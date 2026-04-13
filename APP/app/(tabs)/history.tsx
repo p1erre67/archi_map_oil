@@ -10,7 +10,7 @@ import {
 import { useGlobalPriceHistory } from "../../src/hooks/useGlobalPriceHistory";
 import { PriceChart } from "../../src/components/PriceChart";
 
-const FUEL_TYPES = ["Gazole", "SP95", "SP98", "E10", "E85", "GPLc"];
+const FUEL_TYPES = ["Gazole", "SP95", "SP98", "E85", "GPLc"];
 
 export default function HistoryScreen() {
   const [selectedFuel, setSelectedFuel] = useState("Gazole");

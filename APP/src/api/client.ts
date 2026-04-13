@@ -1,6 +1,6 @@
 const BASE_URL = process.env.EXPO_PUBLIC_API_URL
   ? `${process.env.EXPO_PUBLIC_API_URL}/api`
-  : "http://localhost:5000/api";
+  : "http://localhost:5001/api";
 
 export async function fetchApi<T>(path: string): Promise<T> {
   const response = await fetch(`${BASE_URL}${path}`);
