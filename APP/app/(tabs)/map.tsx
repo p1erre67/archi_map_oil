@@ -17,7 +17,14 @@ export default function MapScreen() {
         );
         return;
       }
-      const loc = await Location.getCurrentPositionAsync({});
+      const last = await Location.getLastKnownPositionAsync();
+      if (last) {
+        setLocation({ lat: last.coords.latitude, lng: last.coords.longitude });
+      }
+      const loc = await Location.getCurrentPositionAsync({
+        accuracy: Location.Accuracy.Balanced,
+        timeInterval: 5000,
+      });
       setLocation({ lat: loc.coords.latitude, lng: loc.coords.longitude });
     })();
   }, []);

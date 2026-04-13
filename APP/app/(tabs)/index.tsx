@@ -31,7 +31,15 @@ export default function StationsScreen() {
         );
         return;
       }
-      const loc = await Location.getCurrentPositionAsync({});
+      // Position cachee (instantanee) en priorite, puis GPS precis en fallback
+      const last = await Location.getLastKnownPositionAsync();
+      if (last) {
+        setUserLocation({ lat: last.coords.latitude, lng: last.coords.longitude });
+      }
+      const loc = await Location.getCurrentPositionAsync({
+        accuracy: Location.Accuracy.Balanced,
+        timeInterval: 5000,
+      });
       setUserLocation({ lat: loc.coords.latitude, lng: loc.coords.longitude });
     })();
   }, []);
