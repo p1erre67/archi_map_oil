@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import {
   View,
   Text,
@@ -8,46 +8,22 @@ import {
   ActivityIndicator,
   Alert,
 } from "react-native";
-import * as Location from "expo-location";
 import { useNearbyStations } from "../../src/hooks/useNearbyStations";
 import { useSyncPrices } from "../../src/hooks/useSyncPrices";
 import { StationCard } from "../../src/components/StationCard";
 import { CityPickerModal } from "../../src/components/CityPickerModal";
+import { useLocation } from "../../src/hooks/useLocation";
 import type { City } from "../../src/hooks/useCitySearch";
 
 export default function StationsScreen() {
-  const [userLocation, setUserLocation] = useState<{ lat: number; lng: number } | null>(null);
+  const deviceLocation = useLocation();
   const [selectedCity, setSelectedCity] = useState<City | null>(null);
-  const [radiusKm, setRadiusKm] = useState(5);
+  const [radiusKm, setRadiusKm] = useState(4);
   const [pickerVisible, setPickerVisible] = useState(false);
 
-  useEffect(() => {
-    (async () => {
-      const { status } = await Location.requestForegroundPermissionsAsync();
-      if (status !== "granted") {
-        Alert.alert(
-          "Permission refusee",
-          "PriceWatch a besoin de votre position pour trouver les stations proches."
-        );
-        return;
-      }
-      // Position cachee (instantanee) en priorite, puis GPS precis en fallback
-      const last = await Location.getLastKnownPositionAsync();
-      if (last) {
-        setUserLocation({ lat: last.coords.latitude, lng: last.coords.longitude });
-      }
-      const loc = await Location.getCurrentPositionAsync({
-        accuracy: Location.Accuracy.Balanced,
-        timeInterval: 5000,
-      });
-      setUserLocation({ lat: loc.coords.latitude, lng: loc.coords.longitude });
-    })();
-  }, []);
-
-  // Si une ville est sélectionnée, on utilise ses coordonnées ; sinon celles du device
-  const activeLat = selectedCity?.latitude ?? userLocation?.lat ?? 0;
-  const activeLng = selectedCity?.longitude ?? userLocation?.lng ?? 0;
-  const locationReady = selectedCity !== null || userLocation !== null;
+  const activeLat = selectedCity?.latitude ?? deviceLocation.latitude;
+  const activeLng = selectedCity?.longitude ?? deviceLocation.longitude;
+  const locationReady = selectedCity !== null || deviceLocation.ready;
 
   const { data: stations, isLoading, error, refetch } = useNearbyStations(
     activeLat,
@@ -100,7 +76,7 @@ export default function StationsScreen() {
 
       <View style={styles.toolbar}>
         <View style={styles.radiusSelector}>
-          {[5, 10].map((r) => (
+          {[4, 8].map((r) => (
             <TouchableOpacity
               key={r}
               style={[styles.radiusBtn, radiusKm === r && styles.radiusBtnActive]}

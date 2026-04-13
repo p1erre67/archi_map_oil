@@ -1,6 +1,7 @@
 import { Slot } from "expo-router";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { StatusBar } from "expo-status-bar";
+import { LocationProvider } from "../src/hooks/useLocation";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -14,8 +15,10 @@ const queryClient = new QueryClient({
 export default function RootLayout() {
   return (
     <QueryClientProvider client={queryClient}>
-      <StatusBar style="dark" />
-      <Slot />
+      <LocationProvider>
+        <StatusBar style="dark" />
+        <Slot />
+      </LocationProvider>
     </QueryClientProvider>
   );
 }

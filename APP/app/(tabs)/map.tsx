@@ -1,41 +1,18 @@
-import { useEffect, useState } from "react";
-import { View, Text, StyleSheet, ActivityIndicator, Alert } from "react-native";
-import * as Location from "expo-location";
+import { View, Text, StyleSheet, ActivityIndicator } from "react-native";
 import { useNearbyStations } from "../../src/hooks/useNearbyStations";
+import { useLocation } from "../../src/hooks/useLocation";
 import { StationsMap } from "../../src/components/StationsMap";
 
 export default function MapScreen() {
-  const [location, setLocation] = useState<{ lat: number; lng: number } | null>(null);
-
-  useEffect(() => {
-    (async () => {
-      const { status } = await Location.requestForegroundPermissionsAsync();
-      if (status !== "granted") {
-        Alert.alert(
-          "Permission refusee",
-          "PriceWatch a besoin de votre position pour afficher la carte."
-        );
-        return;
-      }
-      const last = await Location.getLastKnownPositionAsync();
-      if (last) {
-        setLocation({ lat: last.coords.latitude, lng: last.coords.longitude });
-      }
-      const loc = await Location.getCurrentPositionAsync({
-        accuracy: Location.Accuracy.Balanced,
-        timeInterval: 5000,
-      });
-      setLocation({ lat: loc.coords.latitude, lng: loc.coords.longitude });
-    })();
-  }, []);
+  const location = useLocation();
 
   const { data: stations, isLoading } = useNearbyStations(
-    location?.lat ?? 0,
-    location?.lng ?? 0,
+    location.latitude,
+    location.longitude,
     10
   );
 
-  if (!location) {
+  if (!location.ready) {
     return (
       <View style={styles.centered}>
         <ActivityIndicator size="large" color="#2563eb" />
@@ -57,7 +34,7 @@ export default function MapScreen() {
     <View style={styles.container}>
       <StationsMap
         stations={stations ?? []}
-        center={{ latitude: location.lat, longitude: location.lng }}
+        center={{ latitude: location.latitude, longitude: location.longitude }}
       />
     </View>
   );
