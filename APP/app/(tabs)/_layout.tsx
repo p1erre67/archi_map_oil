@@ -6,25 +6,24 @@ export default function TabsLayout() {
     <Tabs
       screenOptions={{
         tabBarActiveTintColor: "#2563eb",
-        headerStyle: { backgroundColor: "#f8fafc" },
-        headerTitleStyle: { fontWeight: "600" },
+        headerShown: false,
       }}
     >
       <Tabs.Screen
         name="index"
         options={{
-          title: "Stations",
+          title: "Carte",
           tabBarIcon: ({ color, size }) => (
-            <Ionicons name="location" size={size} color={color} />
+            <Ionicons name="map" size={size} color={color} />
           ),
         }}
       />
       <Tabs.Screen
-        name="map"
+        name="stations"
         options={{
-          title: "Carte",
+          title: "Stations",
           tabBarIcon: ({ color, size }) => (
-            <Ionicons name="map" size={size} color={color} />
+            <Ionicons name="location" size={size} color={color} />
           ),
         }}
       />

@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useState } from "react";
+import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
 import * as Location from "expo-location";
 import { Alert } from "react-native";
 
@@ -14,7 +14,16 @@ const LocationContext = createContext<LocationState>({
   ready: false,
 });
 
-export function LocationProvider({ children }: { children: React.ReactNode }) {
+function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
+  return Promise.race([
+    promise,
+    new Promise<T>((_, reject) =>
+      setTimeout(() => reject(new Error(`Timeout apres ${ms}ms`)), ms)
+    ),
+  ]);
+}
+
+export function LocationProvider({ children }: { children: ReactNode }) {
   const [state, setState] = useState<LocationState>({
     latitude: 0,
     longitude: 0,
@@ -23,25 +32,47 @@ export function LocationProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     (async () => {
-      const { status } = await Location.requestForegroundPermissionsAsync();
-      if (status !== "granted") {
-        Alert.alert(
-          "Permission refusee",
-          "PriceWatch a besoin de votre position pour trouver les stations proches."
-        );
-        return;
-      }
+      try {
+        const { status } = await Location.requestForegroundPermissionsAsync();
+        if (status !== "granted") {
+          Alert.alert(
+            "Permission refusee",
+            "PriceWatch a besoin de votre position pour trouver les stations proches."
+          );
+          return;
+        }
 
-      // Position reseau (WiFi/antenne, ~1-2s, ~100m de precision)
-      // Suffisant pour chercher des stations dans un rayon de 5-10km
-      const loc = await Location.getCurrentPositionAsync({
-        accuracy: Location.Accuracy.Lowest,
-      });
-      setState({
-        latitude: loc.coords.latitude,
-        longitude: loc.coords.longitude,
-        ready: true,
-      });
+        // Position deja connue du device : instantane si disponible
+        const cached = await Location.getLastKnownPositionAsync();
+        if (cached) {
+          setState({
+            latitude: cached.coords.latitude,
+            longitude: cached.coords.longitude,
+            ready: true,
+          });
+        }
+
+        // Rafraichissement : Accuracy.Balanced utilise reseau + GPS via FusedLocationProvider
+        // (Accuracy.Lowest correspond a PRIORITY_PASSIVE qui hang si aucune autre app
+        // ne demande la localisation.)
+        const fresh = await withTimeout(
+          Location.getCurrentPositionAsync({
+            accuracy: Location.Accuracy.Balanced,
+          }),
+          5000
+        );
+        setState({
+          latitude: fresh.coords.latitude,
+          longitude: fresh.coords.longitude,
+          ready: true,
+        });
+      } catch (err) {
+        console.error("[useLocation] Failed to get location:", err);
+        Alert.alert(
+          "Erreur de localisation",
+          err instanceof Error ? err.message : "Unknown error"
+        );
+      }
     })();
   }, []);
 

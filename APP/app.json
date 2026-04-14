@@ -6,7 +6,8 @@
     "scheme": "pricewatch",
     "platforms": [
       "ios",
-      "android"
+      "android",
+      "web"
     ],
     "ios": {
       "supportsTablet": true,
