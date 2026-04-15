@@ -21,7 +21,7 @@ Fonctionnellement : suivi des prix des carburants en France (stations-service), 
 | **Front web** | React 19, TypeScript, Vite, React Query, Leaflet |
 | **Mobile** | Expo, React Native, expo-router, Leaflet (WebView) |
 | **CI/CD** | GitHub Actions |
-| **Hosting API** | Azure Container Apps (scale-to-zero) |
+| **Hosting API** | Azure Container Apps |
 | **Hosting Front** | Vercel |
 
 ---
@@ -505,8 +505,6 @@ Chaque module a sa propre table de migrations EF (`__ef_migrations_prices`, `__e
               └─────────────────────────┘
 ```
 
-**Couts** : 0 €/mois (scale-to-zero + free tiers). L'API dort la plupart du temps et se reveille uniquement sur demande (HTTP request) ou via le cron quotidien.
-
 ## CI/CD
 
 | Workflow | Declencheur | Action |
@@ -566,7 +564,7 @@ npm install
 npm run dev
 ```
 
-En dev, un `PriceSyncBackgroundService` synchronise automatiquement les prix toutes les 24h. En prod, ce service est desactive et remplace par le cron GitHub Actions (pour permettre le scale-to-zero d'Azure Container Apps).
+En dev, un `PriceSyncBackgroundService` synchronise automatiquement les prix toutes les 24h. En prod, ce service est desactive et remplace par le cron GitHub Actions 
 
 ## App mobile (Expo)
 
