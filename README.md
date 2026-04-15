@@ -605,11 +605,15 @@ La variable est injectee au build. Modifier l'URL necessite un rebuild.
 
 ---
 
-# Pour aller plus loin : scalabilite des events
+# Pour aller plus loin
+
+Deux axes d'evolution interessants a creuser dans le cadre d'une montee en charge du systeme : robustifier le dispatch des events (write model) et optimiser les requetes complexes cote lecture avec Dapper (read model).
+
+## Scalabilite des events
 
 Cette section reflechit a la maniere dont l'architecture actuelle (events dispatches in-process synchrones via MediatR) pourrait evoluer vers des patterns plus robustes a mesure que le systeme grossit.
 
-## Situation actuelle (in-process synchrone)
+### Situation actuelle (in-process synchrone)
 
 Les Domain Events sont dispatches par MediatR dans le meme processus, de maniere synchrone, apres le `SaveChangesAsync` :
 
@@ -633,7 +637,7 @@ HTTP Request
 - Si un handler echoue : pas de retry, les handlers suivants ne s'executent pas
 - Tout est synchrone : la requete HTTP attend la fin de toute la chaine
 
-## Niveau 2 — Outbox Pattern + Background Worker
+### Niveau 2 — Outbox Pattern + Background Worker
 
 L'Outbox garantit qu'un event n'est jamais perdu en l'inserant dans la **meme transaction** que les donnees metier.
 
@@ -723,7 +727,7 @@ Background Worker (toutes les 5s)
        └─ UPDATE outbox_messages SET processed_at = NOW()
 ```
 
-## Niveau 3 — Outbox + Message Broker (RabbitMQ / Azure Service Bus)
+### Niveau 3 — Outbox + Message Broker (RabbitMQ / Azure Service Bus)
 
 Quand le monolithe se decoupe en services independants (ex : le module History devient un microservice), un **broker externe** remplace MediatR pour la communication inter-services.
 
@@ -755,7 +759,7 @@ Service Prices                          Service History
                                            └─ HistoryDbContext.Save
 ```
 
-## Comparatif
+### Comparatif
 
 | | Actuel | Outbox (niveau 2) | Broker (niveau 3) |
 |---|---|---|---|
@@ -764,3 +768,136 @@ Service Prices                          Service History
 | **Performance** | Synchrone | Asynchrone | Asynchrone + distribue |
 | **Scaling** | Monolithe unique | Monolithe unique | Multi-instances |
 | **Complexite** | Faible | Moyenne | Elevee |
+
+---
+
+## Dapper dans le read model CQRS
+
+### Le constat
+
+Une archi CQRS separe les **Commands** (ecriture) des **Queries** (lecture). Cette separation n'est pas que cosmetique : les deux cotes ont des besoins techniques fondamentalement differents.
+
+| Cote | Besoins | Outil naturel |
+|---|---|---|
+| **Command (write)** | Change tracking, invariants DDD, transactions, Unit of Work, migrations | **EF Core** |
+| **Query (read lourde)** | Vitesse brute, SQL precis, aggregations en DB, pas de tracking | **Dapper** |
+
+Le pattern industriel courant : **EF Core pour le write model, Dapper pour les queries complexes ou chaudes du read model**. Les deux cohabitent dans la meme couche Infrastructure sans se marcher dessus.
+
+### Pourquoi EF Core n'est pas ideal cote read lourd
+
+Regardons `GetGlobalPriceHistoryQueryHandler` du module History :
+
+```csharp
+var records = await _repository.GetGlobalAveragesAsync(
+    request.FuelType, fromUtc, toUtc, request.StationIds, cancellationToken);
+
+// Agrege cote CLIENT en LINQ (pas en SQL)
+var points = records
+    .GroupBy(r => r.RecordedAt.Date)
+    .Select(g => new GlobalPricePointDto(
+        g.Key,
+        Math.Round(g.Average(r => r.PricePerLiter), 3),
+        g.Min(r => r.PricePerLiter),
+        g.Max(r => r.PricePerLiter),
+        g.Select(r => r.ExternalStationId).Distinct().Count()))
+    .OrderBy(p => p.Date)
+    .ToList();
+```
+
+**Ce qui se passe reellement** :
+1. EF genere un `SELECT *` qui ramene **toutes les lignes** de la periode en memoire
+2. Chaque ligne est materialisee en `PriceRecord` avec change tracking
+3. Le `GroupBy` / `Average` / `Min` / `Max` est execute **cote C#** apres le chargement
+4. Sur 10k records ca va, sur 10M records l'app crash en OutOfMemory
+
+Le meme resultat en SQL pur tiendrait sur un seul aller-retour, avec **zero tuple materialise**, grace a un `GROUP BY` natif Postgres.
+
+### L'implementation avec Dapper
+
+On introduit une **interface dediee aux queries lourdes**, injectee a cote du repository EF :
+
+```csharp
+// Application / Queries / GetGlobalPriceHistory
+public interface IPriceHistoryQueries
+{
+    Task<IReadOnlyList<GlobalPricePointDto>> GetGlobalPricePointsAsync(
+        string fuelType, DateTime from, DateTime to,
+        IReadOnlyList<string>? stationIds, CancellationToken ct);
+}
+
+// Infrastructure / Queries
+internal sealed class PriceHistoryQueries : IPriceHistoryQueries
+{
+    private readonly NpgsqlConnection _connection;
+
+    public PriceHistoryQueries(NpgsqlConnection connection) => _connection = connection;
+
+    public async Task<IReadOnlyList<GlobalPricePointDto>> GetGlobalPricePointsAsync(
+        string fuelType, DateTime from, DateTime to,
+        IReadOnlyList<string>? stationIds, CancellationToken ct)
+    {
+        const string sql = @"
+            SELECT
+                date_trunc('day', recorded_at)          AS date,
+                ROUND(AVG(price_per_liter)::numeric, 3) AS averagePrice,
+                MIN(price_per_liter)                    AS minPrice,
+                MAX(price_per_liter)                    AS maxPrice,
+                COUNT(DISTINCT external_station_id)     AS stationCount
+            FROM history_price_records
+            WHERE fuel_type = @FuelType
+              AND recorded_at BETWEEN @From AND @To
+              AND (@StationIds IS NULL OR external_station_id = ANY(@StationIds))
+            GROUP BY date_trunc('day', recorded_at)
+            ORDER BY date;";
+
+        var rows = await _connection.QueryAsync<GlobalPricePointDto>(
+            new CommandDefinition(sql,
+                new { FuelType = fuelType, From = from, To = to, StationIds = stationIds },
+                cancellationToken: ct));
+
+        return rows.AsList();
+    }
+}
+```
+
+Et le handler devient trivial :
+
+```csharp
+public async Task<Result<IReadOnlyList<GlobalPricePointDto>>> Handle(
+    GetGlobalPriceHistoryQuery request, CancellationToken ct)
+{
+    var points = await _queries.GetGlobalPricePointsAsync(
+        request.FuelType, request.From, request.To, request.StationIds, ct);
+
+    return Result.Success(points);
+}
+```
+
+### Ce qu'on gagne
+
+- **Perf** : le GROUP BY / AVG / MIN / MAX tourne sur Postgres, pas en memoire C#. Sur des volumes eleves (100k+ records), gain d'un facteur 10 a 100.
+- **Controle fin du SQL** : on peut utiliser `date_trunc`, `DISTINCT`, CTE, window functions... tout ce que Postgres offre et qu'EF ne traduit pas parfaitement.
+- **Zero allocation inutile** : pas de change tracking, pas de proxies, pas de navigation properties charges pour rien.
+
+### Ce qu'on ne casse pas
+
+- **Le write model reste en EF Core** — les aggregates, les invariants DDD, les Unit of Work, les migrations : tout fonctionne comme avant. Dapper ne remplace pas EF, il complete.
+- **Les deux repositories vivent dans la meme couche Infrastructure** — pas de fuite vers la couche Application. Les handlers dependent d'interfaces dans `Application/Queries/`, ils ne savent meme pas que Dapper existe.
+- **Les architecture tests restent valides** — les interfaces sont toujours dans `Domain` / `Application`, les implementations dans `Infrastructure`.
+
+### Query handlers candidats dans ce projet
+
+Aujourd'hui, avec les volumes actuels (quelques centaines de stations, quelques milliers de records), **tout fonctionne tres bien en EF Core**. Ce refactor serait premature. Mais si le projet grossissait (par exemple en synchronisant toute la France : ~10 000 stations × 5 carburants × 365 jours = ~18M records / an), ces trois handlers deviendraient candidats a une migration vers Dapper :
+
+| Handler | Raison |
+|---|---|
+| `GetGlobalPriceHistoryQueryHandler` | Aggregation GROUP BY / AVG / MIN / MAX faite cote client aujourd'hui |
+| `GetCheapestStationsQueryHandler` | Le `ORDER BY MIN subquery` force EF a generer un SQL sous-optimal |
+| `GetNearbyStationsQueryHandler` | Le calcul Haversine via `Math.Sin` / `Math.Cos` serait plus efficace en SQL natif, voire via l'extension **PostGIS** |
+
+### Pourquoi garder EF Core par defaut
+
+EF Core reste le bon choix **par defaut** pour 80% des requetes. Sur une lecture simple (`GetByExternalIdAsync`), le gain Dapper est negligeable et on perd la lisibilite de LINQ, le typage fort, le tracking optionnel. Le pattern hybride s'applique **uniquement aux queries couteuses ou tres frequentes** — pas a tout, pas systematiquement.
+
+C'est la meme philosophie que l'Outbox Pattern plus haut : **ce sont des outils a sortir de la boite quand le besoin reel arrive**, pas des choix architecturaux a prendre des le premier commit.
