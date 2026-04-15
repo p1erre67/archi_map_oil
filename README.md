@@ -1,6 +1,8 @@
 # PriceWatch
 
-Suivi des prix des carburants en France. Synchronisation quotidienne depuis l'API gouvernementale, historique des prix, carte interactive.
+> Projet personnel de **portfolio backend** centre sur la mise en pratique de Clean Architecture, DDD, CQRS et Event-Driven design avec .NET 10.
+
+Fonctionnellement : suivi des prix des carburants en France (stations-service), synchronisation quotidienne depuis l'API gouvernementale, historique des prix, carte interactive web et mobile.
 
 ## URLs
 
@@ -14,53 +16,425 @@ Suivi des prix des carburants en France. Synchronisation quotidienne depuis l'AP
 
 | Couche | Techno |
 |--------|--------|
-| API | .NET 10, Minimal APIs, MediatR, EF Core |
-| BDD | PostgreSQL (Supabase) |
-| Front | React 19, TypeScript, Vite, Leaflet |
-| CI/CD | GitHub Actions |
-| Hosting API | Azure Container Apps (scale-to-zero) |
-| Mobile | Expo, React Native, Leaflet (WebView) |
-| Hosting Front | Vercel |
+| **API** | .NET 10, Minimal APIs, MediatR, EF Core |
+| **BDD** | PostgreSQL (Supabase) |
+| **Front web** | React 19, TypeScript, Vite, React Query, Leaflet |
+| **Mobile** | Expo, React Native, expo-router, Leaflet (WebView) |
+| **CI/CD** | GitHub Actions |
+| **Hosting API** | Azure Container Apps (scale-to-zero) |
+| **Hosting Front** | Vercel |
 
-Architecture : monolithe modulaire, Clean Architecture, CQRS.
+---
+
+# Back-end — le cœur du projet
+
+Le focus du projet est sur **l'architecture back-end**. Le but n'etait pas de livrer un produit commercial mais de **mettre en pratique des patterns d'architecture** qu'on retrouve en mission chez des clients serieux : Clean Architecture, DDD, CQRS, Event-Driven. Le domaine fonctionnel (prix carburants) est volontairement simple pour que le temps soit investi sur la **structure du code**, pas sur les regles metier.
+
+## Architecture d'ensemble
+
+```
+┌──────────────────────────────────────────────────────────────────┐
+│                      PriceWatch.Api (host)                       │
+│   Minimal APIs · DI container · Middleware · BackgroundService   │
+└─────────────────┬────────────────────────────┬───────────────────┘
+                  │                            │
+    ┌─────────────┴──────────────┐ ┌───────────┴──────────────────┐
+    │  PriceWatch.Modules.Prices │ │ PriceWatch.Modules.History   │
+    │                            │ │                              │
+    │  Domain                    │ │  Domain                      │
+    │  Application (CQRS)        │ │  Application (CQRS)          │
+    │  Infrastructure            │ │  Infrastructure              │
+    │  Endpoints                 │ │  Endpoints                   │
+    └─────────────┬──────────────┘ └───────────┬──────────────────┘
+                  │                            │
+                  └──────────┬─────────────────┘
+                             │
+                  ┌──────────┴──────────────┐
+                  │  PriceWatch.SharedKernel │
+                  │                          │
+                  │  Entity, AggregateRoot   │
+                  │  DomainEvent, Result     │
+                  │  IEndpoint, Behaviours   │
+                  └──────────────────────────┘
+```
+
+**Monolithe modulaire** : chaque module est un projet .NET autonome avec ses propres couches Clean Architecture. Les modules ne se parlent **pas en direct** (pas de `using PriceWatch.Modules.Other`). La communication inter-modules passe exclusivement par des **events**.
+
+Chaque module a son propre `DbContext` et ses propres tables avec un prefixe (`prices_*`, `history_*`). La meme base physique Postgres est utilisee, mais les frontieres logiques sont strictes — demain, un module peut devenir un microservice sans rewrite du code metier.
+
+## Patterns implementes et pourquoi
+
+### 1. Clean Architecture (par module)
+
+Chaque module respecte une **inversion de dependances** stricte :
+
+```
+Endpoints ──► Application ──► Domain
+                   │              ▲
+                   └── Infrastructure (implemente les interfaces de Domain)
+```
+
+| Couche | Ce qu'elle contient | Ce qu'elle connait |
+|---|---|---|
+| **Domain** | Entities, Value Objects, Domain Events, Repository *interfaces*, Errors | Rien d'externe. Pur C# + SharedKernel |
+| **Application** | Commands, Queries, Handlers (via MediatR), DTOs, Validators, UseCases | Domain uniquement |
+| **Infrastructure** | EF Core DbContext, Repository *implementations*, HTTP clients externes, DI registration | Application + Domain |
+| **Endpoints** | Minimal APIs (`MapGet`, `MapPost`) | Application uniquement via `ISender` |
+
+**Test d'isolation** : le dossier `Domain/` ne contient **aucun** `using Microsoft.EntityFrameworkCore`. Le domaine metier peut etre testable sans base de donnees, sans framework web, sans rien. C'est la promesse de Clean Architecture.
+
+**Pourquoi** : maintenabilite a long terme. Le metier (le plus stable) ne depend jamais de l'infra (qui bouge souvent : Postgres → Mongo, EF → Dapper, etc.). Quand on change un provider DB, seul le dossier `Infrastructure/` est touche.
+
+### 2. Domain-Driven Design (DDD)
+
+Les entites metier sont **anemiques interdites**. Toute regle metier est dans l'aggregate, pas dans un "service".
+
+Exemple : `StationPrice.UpsertFuelPrice(fuelType, price, updatedAt)` — l'aggregate decide si c'est un insert ou un update, applique les invariants, et leve un Domain Event. Le handler ne fait que orchestrer.
+
+```csharp
+public sealed class StationPrice : AggregateRoot<StationPriceId>
+{
+    public void UpsertFuelPrice(string fuelType, decimal price, DateTime updatedAt)
+    {
+        var existing = _fuelPrices.FirstOrDefault(fp => fp.FuelType == fuelType);
+        if (existing is not null)
+            existing.UpdatePrice(price, updatedAt);
+        else
+            _fuelPrices.Add(FuelPrice.Create(fuelType, price, updatedAt));
+
+        LastUpdated = DateTime.UtcNow;
+    }
+
+    public void MarkAsSynced(int stationCount)
+    {
+        RaiseDomainEvent(new StationPricesSyncedEvent(stationCount));
+    }
+}
+```
+
+**Building blocks dans le SharedKernel** :
+- `Entity<TId>` : egalite basee sur l'identite (pas la reference memoire)
+- `AggregateRoot<TId>` : hereditde de Entity + collection de `DomainEvents` en attente
+- `DomainEvent` : record immuable qui implement `INotification` (MediatR)
+- `Result` / `Result<T>` : pattern fonctionnel pour les erreurs sans exceptions
+- `Error.Validation(...)`, `Error.NotFound(...)` : typage strict des erreurs
+
+**Pourquoi** : le code metier est lisible et auto-documente. Un nouveau dev regarde `StationPrice.cs` et comprend immediatement quelles operations sont autorisees et leurs regles, sans avoir a suivre une chaine de services.
+
+### 3. CQRS via MediatR
+
+Chaque use-case est materialise par une **Command** (ecriture) ou une **Query** (lecture) + un Handler. **Aucune classe "Service" geante** qui regroupe des responsabilites disparates.
+
+```
+Application/
+├── Commands/
+│   └── SyncStationPrices/
+│       ├── SyncStationPricesCommand.cs         ← juste les donnees (record)
+│       ├── SyncStationPricesCommandHandler.cs  ← la logique
+│       └── SyncStationPricesCommandValidator.cs ← FluentValidation
+├── Queries/
+│   ├── GetNearbyStations/
+│   ├── GetCheapestStations/
+│   └── GetStationPrices/
+```
+
+Un endpoint Minimal API ne fait que **traduire l'HTTP en Command/Query** et retourner le `Result` :
+
+```csharp
+group.MapGet("/nearby", async (double latitude, double longitude, double radiusKm,
+                                ISender sender, CancellationToken ct) =>
+{
+    var result = await sender.Send(
+        new GetNearbyStationsQuery(latitude, longitude, radiusKm), ct);
+
+    return result.IsSuccess
+        ? Results.Ok(result.Value)
+        : Results.Problem(result.Error.Description);
+});
+```
+
+**Pourquoi** :
+- **Lisibilite** : un use-case = un dossier = 3 fichiers courts. On trouve instantanement le code qui execute "synchroniser les prix".
+- **Testabilite** : un handler se teste en isolation, on mocke les repositories.
+- **Evolutivite** : on peut separer les modeles de lecture et d'ecriture. Les queries peuvent utiliser des projections denormalisees, les commands restent sur les aggregates.
+
+### 4. Pipeline Behaviors (cross-cutting concerns)
+
+MediatR permet d'intercaler des **middlewares** entre `Send()` et le Handler, appliques automatiquement a **tous les handlers**. Exemple dans ce projet : `ValidationPipelineBehavior` :
+
+```csharp
+public sealed class ValidationPipelineBehavior<TRequest, TResponse>
+    : IPipelineBehavior<TRequest, TResponse>
+    where TRequest : IRequest<TResponse>
+    where TResponse : Result
+{
+    public async Task<TResponse> Handle(TRequest request,
+        RequestHandlerDelegate<TResponse> next, CancellationToken ct)
+    {
+        var failures = _validators
+            .Select(v => v.Validate(new ValidationContext<TRequest>(request)))
+            .SelectMany(r => r.Errors)
+            .ToList();
+
+        if (failures.Count > 0)
+            return Result.CreateFailure<TResponse>(
+                Error.Validation(failures[0].PropertyName,
+                    string.Join("; ", failures.Select(f => f.ErrorMessage))));
+
+        return await next();
+    }
+}
+```
+
+**Ce que ca donne** : on ecrit un `FluentValidator` a cote de chaque Command, et **la validation s'applique automatiquement** avant le Handler, sans toucher au Handler. Pas de duplication, aucun boilerplate dans les use-cases.
+
+**Pourquoi** : **DRY et separation des preoccupations**. Le Handler se concentre sur son metier. Les concerns transversaux (validation, logging, metriques, transactions, cache) sont ajoutes par-dessus sans modifier le code metier. Meme principe qu'un middleware HTTP mais au niveau application.
+
+### 5. Domain Events & Event-Driven
+
+Quand `StationPrice.MarkAsSynced()` leve un `StationPricesSyncedEvent`, il est dispatche via MediatR apres le `SaveChangesAsync` (dans le `DbContext` override). **N reacteurs** peuvent y reagir sans que l'aggregate les connaisse.
+
+Dans le projet :
+
+```
+StationPricesSyncedEvent levé par l'aggregate
+        │
+        ▼
+PricesDbContext.SaveChangesAsync() ─ collecte events, save, dispatch
+        │
+        ├──► LogStationPricesSyncedHandler        (observabilite, Serilog)
+        ├──► DetectPriceAnomalyHandler            (metier, alerte si prix anormal)
+        └──► PublishIntegrationEventOnSyncHandler (adapter cross-module)
+                │
+                ▼
+        StationPricesSyncedIntegrationEvent
+                │
+                ▼
+        RecordPricesOnSyncHandler (module History)
+                │
+                └──► INSERT INTO history_price_records
+```
+
+**Distinction cle** : **Domain Events** restent *dans le meme module*. **Integration Events** traversent les frontieres de module (Prices → History). Le module History ne connait pas `StationPricesSyncedEvent` — il ecoute `StationPricesSyncedIntegrationEvent` qui est defini dans le SharedKernel.
+
+**Pourquoi** :
+- **Decouplage fort** : le module Prices ignore totalement l'existence du module History. On peut desactiver History sans rien changer dans Prices.
+- **Ouvert a l'extension** : ajouter un nouveau module "Notifications" qui envoie un email quand un prix baisse ? Un nouveau handler sur l'event existant, zero changement ailleurs.
+- **Evolutivite architecturale** : cette structure est le chemin naturel vers un split en microservices (voir section "Pour aller plus loin").
+
+### 6. Unit of Work (via EF Core)
+
+Le `DbContext` joue le role d'**Unit of Work** — il tracke tous les changements en memoire, et `SaveChangesAsync()` commit le tout dans une seule transaction. C'est expose a la couche Application via une interface `IPricesUnitOfWork` (qui ne depend **pas** d'EF Core dans son namespace) pour que le domaine reste ignorant de l'ORM.
+
+```csharp
+// Dans Application — ne connait rien d'EF
+public interface IPricesUnitOfWork
+{
+    Task<int> SaveChangesAsync(CancellationToken cancellationToken = default);
+}
+
+// Dans Infrastructure — l'implementation pointe vers EF
+services.AddScoped<IPricesUnitOfWork>(sp => sp.GetRequiredService<PricesDbContext>());
+```
+
+**Pourquoi** : tester un handler sans demarrer une vraie DB, ou changer d'ORM sans reecrire le metier.
+
+### 7. Repository Pattern
+
+Chaque aggregate a son `IRepository` dans le Domain et une implementation EF dans l'Infrastructure. Les queries complexes (ex : stations les moins cheres, recherche par distance Haversine) restent dans le repository concret — l'Application consomme une methode nommee, pas un `IQueryable`.
+
+```csharp
+public interface IStationPriceRepository
+{
+    Task<StationPrice?> GetByExternalIdAsync(string externalStationId, CancellationToken ct);
+    Task<IReadOnlyList<StationPrice>> GetNearbyAsync(double lat, double lng, double radiusKm, CancellationToken ct);
+    Task<IReadOnlyList<StationPrice>> GetCheapestByFuelTypeAsync(string fuelType, int limit, CancellationToken ct);
+    void Add(StationPrice station);
+    void Update(StationPrice station);
+}
+```
+
+**Pourquoi** : les methodes expriment une **intention metier** (`GetCheapestByFuelTypeAsync`) plutot qu'une technique (`Query<T>`). L'Application reste lisible et les optimisations SQL restent dans un seul endroit.
+
+## Structure de dossiers
+
+```
+API/src/
+├── PriceWatch.Api/                         ← host ASP.NET Core
+│   ├── Program.cs                          ← composition DI + middleware
+│   ├── Infrastructure/
+│   │   └── PriceSyncBackgroundService.cs   ← sync automatique en dev
+│   └── Extensions/
+│       └── WebApplicationExtensions.cs     ← auto-discovery des IEndpoint
+│
+├── PriceWatch.SharedKernel/                ← building blocks communs
+│   ├── Domain/Primitives/                  ← Entity, AggregateRoot
+│   ├── Domain/Events/                      ← DomainEvent, IHasDomainEvents
+│   ├── Domain/Results/                     ← Result<T>, Error
+│   ├── Application/Events/                 ← IntegrationEvents
+│   ├── Application/Interfaces/             ← IEndpoint
+│   └── Application/Behaviours/             ← ValidationPipelineBehavior
+│
+└── Modules/
+    ├── PriceWatch.Modules.Prices/
+    │   ├── Domain/                         ← StationPrice, Brand, FuelPrice, events
+    │   ├── Application/                    ← CQRS + EventHandlers
+    │   ├── Infrastructure/                 ← EF Core, repositories, DI
+    │   └── Endpoints/                      ← PricesEndpoints.cs
+    │
+    └── PriceWatch.Modules.History/
+        ├── Domain/
+        ├── Application/
+        ├── Infrastructure/
+        └── Endpoints/
+```
+
+## MCD
+
+### Module Prices
+
+```
+┌─────────────────────────────────┐
+│     prices_brands               │
+├─────────────────────────────────┤
+│ PK  id              INT         │
+│     name            VARCHAR(100)│
+│     short_name      VARCHAR(50) │
+│     nb_stations     INT         │
+└────────────┬────────────────────┘
+             │ 1..N
+┌────────────┴────────────────────┐
+│     prices_station_prices       │
+├─────────────────────────────────┤
+│ PK  id                    CHAR(36) │
+│ FK  brand_id              INT      │
+│     external_station_id   VARCHAR(100) UNIQUE │
+│     station_name          VARCHAR(200) │
+│     address, city, pc, lat, lon        │
+│     last_updated          TIMESTAMPTZ  │
+└────────────┬────────────────────┘
+             │ 1..N (owned entity)
+┌────────────┴────────────────────┐
+│     prices_fuel_prices          │
+├─────────────────────────────────┤
+│ PK  id              INT AUTO    │
+│ FK  station_price_id CHAR(36)   │
+│     fuel_type       VARCHAR(20) │
+│     price_per_liter DECIMAL(8,3)│
+│     updated_at      TIMESTAMPTZ │
+└─────────────────────────────────┘
+```
+
+### Module History
+
+```
+┌─────────────────────────────────┐
+│     history_price_records       │  ← append-only, immuable
+├─────────────────────────────────┤
+│ PK  id                    CHAR(36) │
+│     external_station_id   VARCHAR(100) [idx] │
+│     station_name          VARCHAR(200) │
+│     city                  VARCHAR(100) │
+│     fuel_type             VARCHAR(20) [idx]  │
+│     price_per_liter       DECIMAL(8,3) │
+│     recorded_at           TIMESTAMPTZ [idx]  │
+│                                       │
+│  Index composite : (stationId, fuelType, recordedAt) │
+└─────────────────────────────────┘
+```
+
+Chaque module a sa propre table de migrations EF (`__ef_migrations_prices`, `__ef_migrations_history`) pour que les deploiements soient independants.
+
+## API endpoints
+
+### Module Prices
+
+| Methode | Route | Description |
+|---------|-------|-------------|
+| `GET` | `/api/prices/stations/{externalStationId}` | Prix d'une station |
+| `GET` | `/api/prices/nearby?latitude&longitude&radiusKm` | Stations a proximite (Haversine) |
+| `GET` | `/api/prices/cheapest?fuelType&limit` | Stations les moins cheres pour un carburant |
+| `POST` | `/api/prices/sync` | Declenche une synchronisation depuis l'API gouv |
+
+### Module History
+
+| Methode | Route | Description |
+|---------|-------|-------------|
+| `GET` | `/api/history/stations/{externalStationId}?fuelType` | Historique d'une station |
+| `GET` | `/api/history/global?fuelType&from&to&stationIds` | Evolution globale (filtrable par stations) |
+
+---
+
+# Infrastructure & DevOps
 
 ## Architecture cloud
 
 ```
-┌─────────────────────────┐
-│  Vercel (front React)   │
-│  archi-map-oil.vercel   │
-└───────────┬─────────────┘
-            │ HTTPS
-            ▼
-┌─────────────────────────┐
-│  Azure Container Apps   │
-│  pricewatch-api         │
-│  scale 0-1, free tier   │
-└───────────┬─────────────┘
-            │ SSL
-            ▼
-┌─────────────────────────┐
-│  Supabase (PostgreSQL)  │
-│  Session Pooler IPv4    │
-└─────────────────────────┘
+┌──────────────────────────┐     ┌──────────────────────────┐
+│   Vercel (front React)   │     │   Expo (mobile APK)      │
+│   archi-map-oil.vercel   │     │   Android native build   │
+└───────────┬──────────────┘     └──────────┬───────────────┘
+            │                               │
+            │         HTTPS                 │
+            └──────────────┬────────────────┘
+                           │
+                           ▼
+              ┌─────────────────────────┐
+              │  Azure Container Apps   │
+              │  pricewatch-api         │
+              │  scale 0-1 · free tier  │
+              │  image : ACR private    │
+              └───────────┬─────────────┘
+                          │ SSL (Session Pooler)
+                          ▼
+              ┌─────────────────────────┐
+              │  Supabase (PostgreSQL)  │
+              │  free tier · EU-west-3  │
+              └─────────────────────────┘
 ```
+
+**Couts** : 0 €/mois (scale-to-zero + free tiers). L'API dort la plupart du temps et se reveille uniquement sur demande (HTTP request) ou via le cron quotidien.
 
 ## CI/CD
 
 | Workflow | Declencheur | Action |
 |---|---|---|
-| `deploy-api.yml` | Push sur master (fichiers `API/`) | Build Docker, push ACR, update Container App |
-| `sync-cron.yml` | Cron quotidien 06:00 UTC | POST /api/prices/sync sur l'API en prod |
+| `.github/workflows/deploy-api.yml` | Push sur `master` (fichiers `API/`) | Tests unitaires → Build Docker → Push ACR → Update Container App |
+| `.github/workflows/sync-cron.yml` | Cron quotidien 06:00 UTC | `POST /api/prices/sync` sur 3 villes (Paris, Strasbourg, Auxerre) |
 
-Le front est deploye automatiquement par Vercel a chaque push sur master.
+Le front est deploye automatiquement par **Vercel** a chaque push sur `master`.
 
-## Modules
+## Secrets management
 
-- **Prices** : stations, marques, prix carburants, synchro API gouv
-- **History** : historique des prix pour le suivi d'evolution
+- **Local** : `dotnet user-secrets` (stockage hors-repo dans `%APPDATA%`)
+- **Azure** : `ContainerApp Secrets` injectes comme variables d'env (`ConnectionStrings__PriceWatch=secretref:db-connection`)
+- **CI/CD** : GitHub Secrets (`AZURE_CREDENTIALS`, `ACR_NAME`, `API_BASE_URL`)
+- **Repo Git** : **aucun secret** — verifie a chaque refactor
 
-## Lancer en local
+---
+
+# Front-end
+
+## Web (React + Vite + Leaflet)
+
+- **TanStack React Query** pour le state serveur (cache, invalidation automatique, requetes concurrentes)
+- **Leaflet + OpenStreetMap** (pas de cle API, pas de limite d'usage)
+- **Autocomplete de villes** via l'API gouvernementale `geo.api.gouv.fr` (zero mapping local, IPv4/IPv6 compatible)
+- **3 onglets** qui partagent le meme filtre (ville + rayon) : Liste, Carte, Evolution des prix
+- Le filtre localite alimente directement la query d'historique : `GET /api/history/global?stationIds=...` → les courbes d'evolution reflettent uniquement les stations de la zone selectionnee
+
+## Mobile (Expo + React Native)
+
+- **Expo Router** (file-system based routing)
+- **Carte Leaflet** dans une `WebView` avec `postMessage` → `Linking.openURL` pour declencher le picker natif "geo:" Android (Google Maps, Waze, etc.)
+- **Geolocation** avec `Accuracy.Balanced` + timeout 5s (eviter le piege `PRIORITY_PASSIVE` d'Android qui hang)
+- Synchronisation automatique des fuel types (SP95 et SP95-E10 traites comme une seule famille)
+
+---
+
+# Lancer en local
+
+## API + front web
 
 ```bash
 # Configurer la connection string (une seule fois)
@@ -71,129 +445,59 @@ dotnet user-secrets set "ConnectionStrings:PriceWatch" "Host=localhost;Port=5432
 dotnet ef database update --project src/Modules/PriceWatch.Modules.Prices --startup-project src/PriceWatch.Api
 dotnet ef database update --project src/Modules/PriceWatch.Modules.History --startup-project src/PriceWatch.Api
 
-# API
+# API (port 5001)
 dotnet run --project src/PriceWatch.Api
 
-# Front
+# Front web (port 5173)
 cd ../front
 npm install
 npm run dev
 ```
 
-En local, le background service synchronise les prix automatiquement (toutes les 24h). En production, c'est un cron GitHub Actions qui appelle l'endpoint sync (pour permettre le scale-to-zero).
+En dev, un `PriceSyncBackgroundService` synchronise automatiquement les prix toutes les 24h. En prod, ce service est desactive et remplace par le cron GitHub Actions (pour permettre le scale-to-zero d'Azure Container Apps).
 
 ## App mobile (Expo)
 
-### Developpement
-
 ```bash
-cd app
+cd APP
 npm install
 npx expo start
 ```
 
-Scanner le QR code 
+Scanner le QR code avec **Expo Go** sur le telephone (meme WiFi que le PC).
 
 ### Build APK (Android)
 
 ```bash
-cd app
+cd APP
 npx expo prebuild --clean --platform android
 cd android
 ./gradlew assembleRelease
 ```
 
-L'APK est genere dans `app/android/app/build/outputs/apk/release/`.
+L'APK est genere dans `APP/android/app/build/outputs/apk/release/app-release.apk`.
 
-Prerequis : JDK 17+ (`winget install Microsoft.OpenJDK.17`) et Android SDK (`ANDROID_HOME` configure).
+**Prerequis** :
+- **JDK 17** (`winget install Microsoft.OpenJDK.17`)
+- **Android SDK** (`ANDROID_HOME` configure)
 
 ### Configuration
 
-Creer un fichier `app/.env` :
+Creer un fichier `APP/.env` :
 
 ```
-EXPO_PUBLIC_API_URL=xxx
+EXPO_PUBLIC_API_URL=https://pricewatch-api.purpleflower-11ac4ef6.westeurope.azurecontainerapps.io
 ```
 
 La variable est injectee au build. Modifier l'URL necessite un rebuild.
 
-## MCD
+---
 
-### Module Prices
+# Pour aller plus loin : scalabilite des events
 
-```
-┌─────────────────────────────────┐
-│     prices_brands               │
-├─────────────────────────────────┤
-│ PK  id              INT        │
-│     name            VARCHAR(100)│
-│     short_name      VARCHAR(50) │
-│     nb_stations     INT         │
-└────────────┬────────────────────┘
-             │ 1..N
-┌────────────┴────────────────────┐
-│     prices_station_prices       │
-├─────────────────────────────────┤
-│ PK  id              CHAR(36)   │
-│ FK  brand_id        INT        │
-│     external_station_id VARCHAR(100) UNIQUE │
-│     station_name    VARCHAR(200)│
-│     address         VARCHAR(300)│
-│     city            VARCHAR(100)│
-│     postal_code     VARCHAR(10) │
-│     latitude        DOUBLE      │
-│     longitude       DOUBLE      │
-│     last_updated    DATETIME    │
-└────────────┬────────────────────┘
-             │ 1..N
-┌────────────┴────────────────────┐
-│     prices_fuel_prices          │
-├─────────────────────────────────┤
-│ PK  id              INT AUTO   │
-│ FK  station_price_id CHAR(36)  │
-│     fuel_type       VARCHAR(20) │
-│     price_per_liter DECIMAL(8,3)│
-│     updated_at      DATETIME    │
-└─────────────────────────────────┘
-```
+Cette section reflechit a la maniere dont l'architecture actuelle (events dispatches in-process synchrones via MediatR) pourrait evoluer vers des patterns plus robustes a mesure que le systeme grossit.
 
-### Module History
-
-```
-┌─────────────────────────────────┐
-│     history_price_records       │
-├─────────────────────────────────┤
-│ PK  id              CHAR(36)   │
-│     external_station_id VARCHAR(100) │
-│     station_name    VARCHAR(200)│
-│     city            VARCHAR(100)│
-│     fuel_type       VARCHAR(20) │
-│     price_per_liter DECIMAL(8,3)│
-│     recorded_at     DATETIME    │
-└─────────────────────────────────┘
-```
-
-## API endpoints
-
-### Prices
-
-| Methode | Route | Description |
-|---------|-------|-------------|
-| GET | `/api/prices/stations/{externalStationId}` | Prix d'une station |
-| GET | `/api/prices/nearby?latitude&longitude&radiusKm` | Stations a proximite |
-| GET | `/api/prices/cheapest?fuelType&limit` | Stations les moins cheres |
-| POST | `/api/prices/sync` | Synchroniser depuis l'API gouv |
-
-### History
-
-| Methode | Route | Description |
-|---------|-------|-------------|
-| GET | `/api/history/station/{externalStationId}` | Historique d'une station |
-| GET | `/api/history/global?fuelType&from&to&stationIds` | Evolution des prix (filtrable par stations) |
-
-## Pour aller plus loin : scalabilite des events
-
-### Situation actuelle (in-process synchrone)
+## Situation actuelle (in-process synchrone)
 
 Les Domain Events sont dispatches par MediatR dans le meme processus, de maniere synchrone, apres le `SaveChangesAsync` :
 
@@ -212,16 +516,14 @@ HTTP Request
                                 └─ HistoryDbContext.SaveChangesAsync()
 ```
 
-Limites :
+**Limites** :
 - Si l'app crash entre le save Prices et le dispatch : events perdus
 - Si un handler echoue : pas de retry, les handlers suivants ne s'executent pas
 - Tout est synchrone : la requete HTTP attend la fin de toute la chaine
 
----
+## Niveau 2 — Outbox Pattern + Background Worker
 
-### Niveau 2 — Outbox Pattern + Background Worker
-
-L'Outbox garantit qu'un event n'est jamais perdu en l'inserant dans la meme transaction que les donnees metier.
+L'Outbox garantit qu'un event n'est jamais perdu en l'inserant dans la **meme transaction** que les donnees metier.
 
 **1. Table `outbox_messages`** dans le schema du module Prices :
 
@@ -309,11 +611,9 @@ Background Worker (toutes les 5s)
        └─ UPDATE outbox_messages SET processed_at = NOW()
 ```
 
----
+## Niveau 3 — Outbox + Message Broker (RabbitMQ / Azure Service Bus)
 
-### Niveau 3 — Outbox + Message Broker (RabbitMQ / Azure Service Bus)
-
-Quand le monolithe se decoupe en services independants (ex: le module History devient un microservice), un broker externe remplace MediatR pour la communication inter-services.
+Quand le monolithe se decoupe en services independants (ex : le module History devient un microservice), un **broker externe** remplace MediatR pour la communication inter-services.
 
 Avec **MassTransit + RabbitMQ** :
 
@@ -343,14 +643,12 @@ Service Prices                          Service History
                                            └─ HistoryDbContext.Save
 ```
 
----
-
-### Comparatif
+## Comparatif
 
 | | Actuel | Outbox (niveau 2) | Broker (niveau 3) |
 |---|---|---|---|
-| Durabilite | Events perdus si crash | Persistes en DB | Persistes en DB + broker |
-| Retry | Non | Oui (worker relit) | Oui (broker) |
-| Performance | Synchrone | Asynchrone | Asynchrone + distribue |
-| Scaling | Monolithe unique | Monolithe unique | Multi-instances |
-| Complexite | Faible | Moyenne | Elevee |
+| **Durabilite** | Events perdus si crash | Persistes en DB | Persistes en DB + broker |
+| **Retry** | Non | Oui (worker relit) | Oui (broker) |
+| **Performance** | Synchrone | Asynchrone | Asynchrone + distribue |
+| **Scaling** | Monolithe unique | Monolithe unique | Multi-instances |
+| **Complexite** | Faible | Moyenne | Elevee |
