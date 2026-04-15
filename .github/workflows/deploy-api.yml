@@ -32,9 +32,13 @@ jobs:
         working-directory: API
         run: dotnet build --no-restore
 
-      - name: Run unit tests
+      - name: Run unit and architecture tests
         working-directory: API
-        run: dotnet test --no-build --filter "FullyQualifiedName~UnitTests"
+        run: dotnet test --no-build --filter "FullyQualifiedName~UnitTests|FullyQualifiedName~ArchitectureTests"
+
+      - name: Run integration tests (Testcontainers Postgres)
+        working-directory: API
+        run: dotnet test --no-build --filter "FullyQualifiedName~IntegrationTests"
 
   deploy:
     runs-on: ubuntu-latest

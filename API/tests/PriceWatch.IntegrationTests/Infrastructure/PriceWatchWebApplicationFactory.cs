@@ -2,17 +2,18 @@ using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
+using PriceWatch.Modules.History.Infrastructure.Persistence;
 using PriceWatch.Modules.Prices.Application.DTOs;
 using PriceWatch.Modules.Prices.Application.Interfaces;
 using PriceWatch.Modules.Prices.Infrastructure.Persistence;
-using Testcontainers.MySql;
+using Testcontainers.PostgreSql;
 
 namespace PriceWatch.IntegrationTests.Infrastructure;
 
 /// <summary>
 /// Shared fixture for the "Integration" xUnit collection.
-/// Starts a MariaDB 11.4 Testcontainer once for the entire test run,
-/// overrides the connection string, and runs EF migrations on first use.
+/// Starts a PostgreSQL 16 Testcontainer once for the entire test run,
+/// overrides the connection string, and runs EF migrations for both modules.
 /// </summary>
 [CollectionDefinition("Integration")]
 public sealed class IntegrationCollection : ICollectionFixture<PriceWatchWebApplicationFactory> { }
@@ -20,11 +21,11 @@ public sealed class IntegrationCollection : ICollectionFixture<PriceWatchWebAppl
 public sealed class PriceWatchWebApplicationFactory
     : WebApplicationFactory<Program>, IAsyncLifetime
 {
-    private readonly MySqlContainer _db = new MySqlBuilder()
-        .WithImage("mariadb:11.4")
+    private readonly PostgreSqlContainer _db = new PostgreSqlBuilder()
+        .WithImage("postgres:16")
         .WithDatabase("pricewatch")
-        .WithUsername("root")
-        .WithPassword("root")
+        .WithUsername("postgres")
+        .WithPassword("postgres")
         .Build();
 
     // ── IAsyncLifetime ────────────────────────────────────────────────────────
@@ -45,8 +46,10 @@ public sealed class PriceWatchWebApplicationFactory
 
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
+        builder.UseEnvironment("Development");
+
         // Override the connection string so every module's DbContext
-        // points to the Testcontainers MariaDB instance.
+        // points to the Testcontainers Postgres instance.
         builder.UseSetting("ConnectionStrings:PriceWatch", _db.GetConnectionString());
 
         builder.ConfigureServices(services =>
@@ -69,6 +72,7 @@ public sealed class PriceWatchWebApplicationFactory
         var sp = scope.ServiceProvider;
 
         await sp.GetRequiredService<PricesDbContext>().Database.MigrateAsync();
+        await sp.GetRequiredService<HistoryDbContext>().Database.MigrateAsync();
     }
 }
 

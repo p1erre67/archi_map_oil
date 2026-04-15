@@ -1,6 +1,6 @@
 # PriceWatch
 
-> Projet personnel de **portfolio backend** centre sur la mise en pratique de Clean Architecture, DDD, CQRS et Event-Driven design avec .NET 10.
+> Projet personnel centre sur la mise en pratique de Clean Architecture, DDD, CQRS et Event-Driven design avec .NET 10.
 
 Fonctionnellement : suivi des prix des carburants en France (stations-service), synchronisation quotidienne depuis l'API gouvernementale, historique des prix, carte interactive web et mobile.
 
@@ -28,7 +28,7 @@ Fonctionnellement : suivi des prix des carburants en France (stations-service), 
 
 # Back-end — le cœur du projet
 
-Le focus du projet est sur **l'architecture back-end**. Le but n'etait pas de livrer un produit commercial mais de **mettre en pratique des patterns d'architecture** qu'on retrouve en mission chez des clients serieux : Clean Architecture, DDD, CQRS, Event-Driven. Le domaine fonctionnel (prix carburants) est volontairement simple pour que le temps soit investi sur la **structure du code**, pas sur les regles metier.
+Le focus du projet est sur **l'architecture back-end**. Le but n'etait pas de livrer un produit commercial mais de **mettre en pratique des patterns d'architecture** qu'on retrouve en entreprise : Clean Architecture, DDD, CQRS, Event-Driven. Le domaine fonctionnel (prix carburants) est volontairement simple pour que le temps soit investi sur la **structure du code**, pas sur les regles metier.
 
 ## Architecture d'ensemble
 
@@ -114,7 +114,7 @@ public sealed class StationPrice : AggregateRoot<StationPriceId>
 
 **Building blocks dans le SharedKernel** :
 - `Entity<TId>` : egalite basee sur l'identite (pas la reference memoire)
-- `AggregateRoot<TId>` : hereditde de Entity + collection de `DomainEvents` en attente
+- `AggregateRoot<TId>` : herite de de Entity + collection de `DomainEvents` en attente
 - `DomainEvent` : record immuable qui implement `INotification` (MediatR)
 - `Result` / `Result<T>` : pattern fonctionnel pour les erreurs sans exceptions
 - `Error.Validation(...)`, `Error.NotFound(...)` : typage strict des erreurs
@@ -288,6 +288,118 @@ API/src/
         ├── Infrastructure/
         └── Endpoints/
 ```
+
+## Tests
+
+La stratégie de tests suit la **pyramide de tests classique** : beaucoup de tests unitaires rapides à la base, quelques tests d'intégration plus lents au milieu, et des tests d'architecture transverses pour garantir que les invariants tiennent dans le temps.
+
+```
+             ┌──────────────────────┐
+             │  Integration (8)     │  ← Postgres réel (Testcontainers)
+             │  ~30s avec Docker    │     flux end-to-end HTTP → DB
+             └──────────────────────┘
+          ┌────────────────────────────┐
+          │  Architecture (16)          │  ← règles structurelles
+          │  ~200ms                     │     via NetArchTest
+          └────────────────────────────┘
+    ┌──────────────────────────────────────┐
+    │  Unit (54)                            │  ← Domain + Handlers
+    │  ~150ms — tous mockés                 │     via NSubstitute
+    └──────────────────────────────────────┘
+```
+
+### Stack de test
+
+| Lib | Usage |
+|---|---|
+| **xUnit** | Test runner |
+| **NSubstitute** | Mocking (repositories, unit of work, logger) |
+| **FluentAssertions** | Assertions lisibles (`.Should().Be(...)`) |
+| **NetArchTest.Rules** | Règles d'architecture exécutées au `dotnet test` |
+| **Testcontainers.PostgreSql** | Postgres 16 éphémère dans Docker pour les intégrations |
+| **Microsoft.AspNetCore.Mvc.Testing** | `WebApplicationFactory<Program>` pour tester toute la pipeline HTTP en in-process |
+
+### 1. Unit tests (54 tests)
+
+Tests isolés qui vérifient une classe à la fois. Toutes les dépendances (repositories, EF Core, logger) sont **mockées**.
+
+**Couverture** :
+- **SharedKernel** — `Entity<TId>` (égalité par identité), `Result<T>` et pattern fonctionnel d'erreurs
+- **Domain** — `StationPrice`, `Brand`, `FuelPrice`, `PriceRecord` : factories, invariants, domain events levés au bon moment
+- **Application / Command handlers** — `SyncStationPricesCommandHandler` avec tous les cas (nouvelle station, existante, brand upsert, liste vide)
+- **Application / Query handlers** — `GetNearby`, `GetCheapest`, `GetStationPrices` : mapping DTO, propagation du `CancellationToken`, gestion du `NotFound`
+- **Application / Event handlers** — `DetectPriceAnomaly`, `PublishIntegrationEventOnSync` (module Prices), `RecordPricesOnSync` (module History) : y compris la coercion UTC pour éviter les soucis Postgres
+
+### 2. Architecture tests (16 tests)
+
+Tests qui **valident l'architecture au build**. Si un dev casse la Clean Architecture, la CI échoue.
+
+```csharp
+[Fact]
+public void Prices_Domain_ShouldNotDependOn_EntityFrameworkCore()
+{
+    var result = Types.InAssembly(PricesAssembly)
+        .That().ResideInNamespace("PriceWatch.Modules.Prices.Domain")
+        .ShouldNot().HaveDependencyOn("Microsoft.EntityFrameworkCore")
+        .GetResult();
+
+    result.IsSuccessful.Should().BeTrue(BuildFailureMessage(result));
+}
+```
+
+**Catégories de règles** :
+
+| Fichier | Règles vérifiées |
+|---|---|
+| `CleanArchitectureTests` | Domain ne dépend ni d'Infrastructure ni d'EF Core · Application ne dépend pas d'Infrastructure · Domain ignore Application (inversion de dépendance) |
+| `ModuleIsolationTests` | **Prices ⇏ History** et **History ⇏ Prices** — les modules communiquent uniquement via Integration Events du SharedKernel |
+| `DddConventionsTests` | Domain Events héritent de `DomainEvent` · interfaces `IRepository` vivent dans `Domain.Repositories` · implémentations dans `Infrastructure.Repositories` · les classes `Repository` et `Handler` sont `sealed` |
+
+**Intérêt** : c'est un **filet de sécurité** qui accompagne la revue de code. Un contributeur qui ajoute un `using Microsoft.EntityFrameworkCore` dans le dossier `Domain/` fait échouer la CI immédiatement, avec un message d'erreur explicite pointant vers le type fautif.
+
+### 3. Integration tests (8 tests)
+
+Tests end-to-end sur un **vrai Postgres** lancé par Testcontainers. Chaque test tourne en quelques ms, seul le démarrage du container coûte (~5-10s, une fois par suite).
+
+```csharp
+// Postgres 16 démarré dans un container Docker éphémère
+private readonly PostgreSqlContainer _db = new PostgreSqlBuilder()
+    .WithImage("postgres:16")
+    .WithDatabase("pricewatch")
+    ...
+    .Build();
+
+// EF Core migre les 2 modules sur le container
+await sp.GetRequiredService<PricesDbContext>().Database.MigrateAsync();
+await sp.GetRequiredService<HistoryDbContext>().Database.MigrateAsync();
+```
+
+**Ce qui est couvert** :
+
+- **`SyncStationPricesIntegrationTests`** — valide le flux **cross-module** le plus important du projet : après un `SyncStationPricesCommand`, les données sont bien écrites dans `prices_*` **et** le module History a reçu l'integration event qui a rempli `history_price_records`. C'est la preuve que la communication event-driven entre modules fonctionne bout en bout.
+- **`PricesEndpointsIntegrationTests`** — via un vrai `HttpClient` sur `WebApplicationFactory`, teste les endpoints Minimal APIs : status codes, sérialisation JSON, 404 sur station inconnue.
+- **`PriceRecordRepositoryIntegrationTests`** — valide les requêtes complexes du repository History sur Postgres, notamment la résolution des **aliases SP95/SP95-E10** et les filtres par date / station IDs.
+
+**Pattern "Arrange in-test"** : chaque test seed les données dont il a besoin via une méthode helper (`SeedRecords()`), utilise des external IDs uniques pour éviter les collisions entre tests, et s'appuie sur un scope DI frais à chaque test.
+
+### Lancer les tests en local
+
+```bash
+cd API
+
+# Unit + architecture (rapide, ~500ms, aucun prérequis)
+dotnet test --filter "FullyQualifiedName~UnitTests|FullyQualifiedName~ArchitectureTests"
+
+# Integration (nécessite Docker Desktop démarré)
+dotnet test --filter "FullyQualifiedName~IntegrationTests"
+
+# Tout
+dotnet test
+```
+
+### En CI
+
+Le workflow [`.github/workflows/deploy-api.yml`](.github/workflows/deploy-api.yml) exécute **les 3 catégories** avant chaque déploiement sur Azure. Les runners `ubuntu-latest` ont Docker préinstallé, donc les integration tests tournent nativement sans configuration supplémentaire. Si un test échoue, le job `deploy` ne démarre pas (`needs: test`) — **aucune version buguée ne peut arriver en prod**.
 
 ## MCD
 
