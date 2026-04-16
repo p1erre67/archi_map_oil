@@ -495,7 +495,7 @@ Chaque module a sa propre table de migrations EF (`__ef_migrations_prices`, `__e
               │  Azure Container Apps   │
               │  pricewatch-api         │
               │  scale 0-1 · free tier  │
-              │  image : ACR private    │
+              │  image : GHCR           │
               └───────────┬─────────────┘
                           │ SSL (Session Pooler)
                           ▼
@@ -509,7 +509,7 @@ Chaque module a sa propre table de migrations EF (`__ef_migrations_prices`, `__e
 
 | Workflow | Declencheur | Action |
 |---|---|---|
-| `.github/workflows/deploy-api.yml` | Push sur `master` (fichiers `API/`) | Tests unitaires → Build Docker → Push ACR → Update Container App |
+| `.github/workflows/deploy-api.yml` | Push sur `master` (fichiers `API/`) | Tests → Build Docker → Push GHCR → Update Container App |
 | `.github/workflows/sync-cron.yml` | Cron quotidien 06:00 UTC | `POST /api/prices/sync` sur 3 villes (Paris, Strasbourg, Auxerre) |
 
 Le front est deploye automatiquement par **Vercel** a chaque push sur `master`.
@@ -518,7 +518,7 @@ Le front est deploye automatiquement par **Vercel** a chaque push sur `master`.
 
 - **Local** : `dotnet user-secrets` (stockage hors-repo dans `%APPDATA%`)
 - **Azure** : `ContainerApp Secrets` injectes comme variables d'env (`ConnectionStrings__PriceWatch=secretref:db-connection`)
-- **CI/CD** : GitHub Secrets (`AZURE_CREDENTIALS`, `ACR_NAME`, `API_BASE_URL`)
+- **CI/CD** : GitHub Secrets (`AZURE_CREDENTIALS`, `API_BASE_URL`) + `GITHUB_TOKEN` (auto-fourni pour GHCR)
 - **Repo Git** : **aucun secret** — verifie a chaque refactor
 
 ---
