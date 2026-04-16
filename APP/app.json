@@ -1,9 +1,10 @@
 {
   "expo": {
-    "name": "PriceWatch",
-    "slug": "pricewatch",
+    "name": "CarbuTrack",
+    "slug": "carbutrack",
     "version": "1.0.0",
-    "scheme": "pricewatch",
+    "scheme": "carbutrack",
+    "icon": "./assets/icon.png",
     "platforms": [
       "ios",
       "android",
@@ -12,7 +13,7 @@
     "ios": {
       "supportsTablet": true,
       "infoPlist": {
-        "NSLocationWhenInUseUsageDescription": "PriceWatch utilise votre position pour trouver les stations-service a proximite."
+        "NSLocationWhenInUseUsageDescription": "CarbuTrack utilise votre position pour trouver les stations-service a proximite."
       }
     },
     "android": {
@@ -22,7 +23,11 @@
         "android.permission.ACCESS_COARSE_LOCATION",
         "android.permission.ACCESS_FINE_LOCATION"
       ],
-      "package": "com.pierrew.pricewatch"
+      "package": "com.pierrew.carbutrack",
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/icon.png",
+        "backgroundColor": "#ffffff"
+      }
     },
     "plugins": [
       "expo-router",
