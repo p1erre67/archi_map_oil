@@ -1,11 +1,14 @@
 import { View, Text, StyleSheet } from "react-native";
 import type { StationPriceDto } from "../types/api";
+import { normalizeFuels } from "../utils/normalizeFuels";
 
 interface Props {
   station: StationPriceDto;
 }
 
 export function StationCard({ station }: Props) {
+  const fuels = normalizeFuels(station.fuelPrices);
+
   return (
     <View style={styles.card}>
       <View style={styles.header}>
@@ -20,7 +23,7 @@ export function StationCard({ station }: Props) {
       </Text>
 
       <View style={styles.pricesContainer}>
-        {station.fuelPrices.map((fuel) => (
+        {fuels.map((fuel) => (
           <View key={fuel.fuelType} style={styles.priceRow}>
             <Text style={styles.fuelType}>{fuel.fuelType}</Text>
             <Text style={styles.price}>{fuel.pricePerLiter.toFixed(3)} EUR/L</Text>

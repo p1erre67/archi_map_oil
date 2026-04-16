@@ -1,4 +1,5 @@
-import { StyleSheet, Linking, Platform } from "react-native";
+import { useRef, useEffect, useMemo } from "react";
+import { StyleSheet, Linking } from "react-native";
 import { WebView } from "react-native-webview";
 import type { StationPriceDto } from "../types/api";
 
@@ -10,33 +11,66 @@ interface Props {
 }
 
 interface WebViewMessage {
-  type: "directions" | "center";
+  type: "nav" | "center";
   lat: number;
   lng: number;
-  name?: string;
+  app?: "google" | "waze" | "apple";
 }
 
 export function StationsMap({ stations, center, selectedFuelType, onCenterChange }: Props) {
-  const markers = stations.map((s) => {
-    const matchedFuel = selectedFuelType && selectedFuelType !== "Tous"
-      ? s.fuelPrices.find(
-          (f) => f.fuelType === selectedFuelType || (selectedFuelType === "SP95" && f.fuelType === "SP95-E10")
-        )
-      : null;
+  const webViewRef = useRef<WebView>(null);
 
+  // Normalise SP95/SP95-E10 → garde le plus recent sous "SP95"
+  function normalizeFuels(fuels: { fuelType: string; pricePerLiter: number; updatedAt: string }[]) {
+    const result: typeof fuels = [];
+    let sp95: (typeof fuels)[number] | null = null;
+    for (const f of fuels) {
+      if (f.fuelType === "SP95" || f.fuelType === "SP95-E10") {
+        if (!sp95 || new Date(f.updatedAt) > new Date(sp95.updatedAt)) {
+          sp95 = { ...f, fuelType: "SP95" };
+        }
+      } else {
+        result.push(f);
+      }
+    }
+    if (sp95) result.push(sp95);
+    return result;
+  }
+
+  // Memorise le HTML : recalcule uniquement quand stations ou center changent
+  // PAS quand selectedFuelType change (gere via injectJavaScript)
+  const markers = useMemo(() => stations.map((s) => {
+    const fuels = normalizeFuels(s.fuelPrices);
     return {
       lat: s.latitude,
       lng: s.longitude,
       name: s.stationName,
       brand: s.brandName ?? "",
-      priceLabel: matchedFuel ? matchedFuel.pricePerLiter.toFixed(2) + "€" : "",
-      prices: s.fuelPrices
-        .map((f) => `${f.fuelType} : ${f.pricePerLiter.toFixed(3)} €/L`)
-        .join("<br/>"),
+      fuelPrices: fuels.map((f) => ({
+        type: f.fuelType,
+        price: f.pricePerLiter,
+      })),
+      pricesHtml: fuels
+        .map((f) => {
+          const date = new Date(f.updatedAt).toLocaleDateString("fr-FR");
+          return `<div class="popup-price-row"><span>${f.fuelType} : ${f.pricePerLiter.toFixed(3)} €/L</span><span class="popup-price-date">${date}</span></div>`;
+        })
+        .join(""),
     };
-  });
+  }), [stations]);
 
-  const html = `
+  // Quand le fuelType change, on injecte du JS pour mettre a jour les markers
+  // sans recharger la WebView (donc sans recentrer la carte)
+  useEffect(() => {
+    if (webViewRef.current && selectedFuelType) {
+      webViewRef.current.injectJavaScript(`
+        updateFuelFilter('${selectedFuelType}');
+        true;
+      `);
+    }
+  }, [selectedFuelType]);
+
+  const html = useMemo(() => `
 <!DOCTYPE html>
 <html>
 <head>
@@ -49,23 +83,43 @@ export function StationsMap({ stations, center, selectedFuelType, onCenterChange
     .popup-title { font-weight: 600; font-size: 14px; margin-bottom: 2px; }
     .popup-brand { color: #666; font-size: 12px; margin-bottom: 4px; }
     .popup-prices { font-size: 13px; color: #2563eb; margin-bottom: 8px; }
-    .popup-directions {
-      display: inline-flex;
+    .popup-price-row { display: flex; justify-content: space-between; align-items: center; }
+    .popup-price-date { color: #94a3b8; font-size: 10px; text-align: right; }
+    .popup-nav-row {
+      display: flex;
+      gap: 10px;
+      margin-top: 4px;
+    }
+    .popup-nav-btn {
+      display: flex;
+      flex-direction: column;
       align-items: center;
-      justify-content: center;
-      background: #2563eb;
-      color: white;
-      width: 36px;
-      height: 36px;
-      border-radius: 50%;
+      gap: 2px;
       cursor: pointer;
       border: none;
+      background: none;
       padding: 0;
     }
-    .popup-directions svg {
-      width: 20px;
-      height: 20px;
+    .popup-nav-icon {
+      width: 32px;
+      height: 32px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .popup-nav-icon svg {
+      width: 18px;
+      height: 18px;
       fill: white;
+    }
+    .popup-nav-icon.google { background: #EA4335; }
+    .popup-nav-icon.waze { background: #33CCFF; }
+    .popup-nav-icon.apple { background: #333333; }
+    .popup-nav-label {
+      font-size: 9px;
+      color: #64748b;
+      font-weight: 500;
     }
     .price-marker {
       background: #ffffff;
@@ -92,12 +146,21 @@ export function StationsMap({ stations, center, selectedFuelType, onCenterChange
       border-right: 5px solid transparent;
       border-top: 6px solid #2563eb;
     }
-    .price-marker.no-price {
-      border-color: #94a3b8;
-      color: #94a3b8;
+    .price-marker.cheapest {
+      background: #dcfce7;
+      border-color: #16a34a;
+      color: #15803d;
     }
-    .price-marker.no-price::after {
-      border-top-color: #94a3b8;
+    .price-marker.cheapest::after {
+      border-top-color: #16a34a;
+    }
+    .price-marker.expensive {
+      background: #fee2e2;
+      border-color: #dc2626;
+      color: #b91c1c;
+    }
+    .price-marker.expensive::after {
+      border-top-color: #dc2626;
     }
   </style>
 </head>
@@ -110,27 +173,83 @@ export function StationsMap({ stations, center, selectedFuelType, onCenterChange
       attribution: '&copy; OpenStreetMap'
     }).addTo(map);
 
-    var markers = ${JSON.stringify(markers)};
+    var stationsData = ${JSON.stringify(markers)};
+    var leafletMarkers = [];
+    var currentFuel = '${selectedFuelType ?? "Tous"}';
 
-    markers.forEach(function(m) {
+    function getPrice(station, fuelType) {
+      if (fuelType === 'Tous') return null;
+      for (var i = 0; i < station.fuelPrices.length; i++) {
+        var f = station.fuelPrices[i];
+        if (f.type === fuelType) return f.price;
+        if (fuelType === 'SP95' && f.type === 'SP95-E10') return f.price;
+      }
+      return null;
+    }
+
+    function buildPopup(m) {
       var popup = '<div class="popup-title">' + m.name + '</div>';
       if (m.brand) popup += '<div class="popup-brand">' + m.brand + '</div>';
-      popup += '<div class="popup-prices">' + m.prices + '</div>';
-      popup += '<button class="popup-directions" onclick="askDirections(' + m.lat + ',' + m.lng + ',\\'' + m.name.replace(/'/g, "\\\\'") + '\\')"><svg viewBox="0 0 24 24"><path d="M21.71 11.29l-9-9a1 1 0 0 0-1.42 0l-9 9a1 1 0 0 0 0 1.42l9 9a1 1 0 0 0 1.42 0l9-9a1 1 0 0 0 0-1.42zM14 14.5V12h-4v3H8v-4a1 1 0 0 1 1-1h5V7.5l3.5 3.5z"/></svg></button>';
+      popup += '<div class="popup-prices">' + m.pricesHtml + '</div>';
+      var escapedName = m.name.replace(/'/g, "\\\\'");
+      popup += '<div class="popup-nav-row">';
+      popup += '<button class="popup-nav-btn" onclick="askNav(\\'google\\',' + m.lat + ',' + m.lng + ')"><div class="popup-nav-icon google"><svg viewBox="0 0 24 24"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/></svg></div><span class="popup-nav-label">Google</span></button>';
+      popup += '<button class="popup-nav-btn" onclick="askNav(\\'waze\\',' + m.lat + ',' + m.lng + ')"><div class="popup-nav-icon waze"><svg viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 17h-2v-2h2v2zm2.07-7.75l-.9.92C13.45 12.9 13 13.5 13 15h-2v-.5c0-1.1.45-2.1 1.17-2.83l1.24-1.26c.37-.36.59-.86.59-1.41 0-1.1-.9-2-2-2s-2 .9-2 2H8c0-2.21 1.79-4 4-4s4 1.79 4 4c0 .88-.36 1.68-.93 2.25z"/></svg></div><span class="popup-nav-label">Waze</span></button>';
+      popup += '<button class="popup-nav-btn" onclick="askNav(\\'apple\\',' + m.lat + ',' + m.lng + ')"><div class="popup-nav-icon apple"><svg viewBox="0 0 24 24"><path d="M12 2L4.5 20.29l.71.71L12 18l6.79 3 .71-.71z"/></svg></div><span class="popup-nav-label">Plans</span></button>';
+      popup += '</div>';
+      return popup;
+    }
 
-      if (m.priceLabel) {
-        var icon = L.divIcon({
-          className: '',
-          html: '<div class="price-marker" style="position:relative">' + m.priceLabel + '</div>',
-          iconSize: [60, 28],
-          iconAnchor: [30, 34],
-          popupAnchor: [0, -36]
-        });
-        L.marker([m.lat, m.lng], { icon: icon }).addTo(map).bindPopup(popup);
-      } else {
-        L.marker([m.lat, m.lng]).addTo(map).bindPopup(popup);
+    function renderMarkers() {
+      // Supprimer les anciens markers
+      leafletMarkers.forEach(function(lm) { map.removeLayer(lm); });
+      leafletMarkers = [];
+
+      // Trouver les 3 moins chers et les 3 plus chers
+      var cheapestPrices = [];
+      var expensivePrices = [];
+      if (currentFuel !== 'Tous') {
+        var allPrices = stationsData
+          .map(function(m) { return getPrice(m, currentFuel); })
+          .filter(function(p) { return p !== null; })
+          .sort(function(a, b) { return a - b; });
+        cheapestPrices = allPrices.slice(0, 3);
+        expensivePrices = allPrices.slice(-3).reverse();
       }
-    });
+
+      stationsData.forEach(function(m) {
+        var popup = buildPopup(m);
+        var price = getPrice(m, currentFuel);
+        var marker;
+
+        if (price !== null) {
+          var isCheap = cheapestPrices.indexOf(price) !== -1;
+          var isExpensive = !isCheap && expensivePrices.indexOf(price) !== -1;
+          var cssClass = 'price-marker' + (isCheap ? ' cheapest' : '') + (isExpensive ? ' expensive' : '');
+          var icon = L.divIcon({
+            className: '',
+            html: '<div class="' + cssClass + '" style="position:relative">' + price.toFixed(2) + '€</div>',
+            iconSize: [60, 28],
+            iconAnchor: [30, 34],
+            popupAnchor: [0, -36]
+          });
+          marker = L.marker([m.lat, m.lng], { icon: icon });
+        } else {
+          marker = L.marker([m.lat, m.lng]);
+        }
+
+        marker.addTo(map).bindPopup(popup);
+        leafletMarkers.push(marker);
+      });
+    }
+
+    function updateFuelFilter(fuel) {
+      currentFuel = fuel;
+      renderMarkers();
+    }
+
+    // Rendu initial
+    renderMarkers();
 
     map.on('moveend', function() {
       var c = map.getCenter();
@@ -141,17 +260,19 @@ export function StationsMap({ stations, center, selectedFuelType, onCenterChange
       }));
     });
 
-    function askDirections(lat, lng, name) {
+    function askNav(app, lat, lng) {
       window.ReactNativeWebView.postMessage(JSON.stringify({
-        type: 'directions',
+        type: 'nav',
+        app: app,
         lat: lat,
-        lng: lng,
-        name: name
+        lng: lng
       }));
     }
   </script>
 </body>
-</html>`;
+  // deps = primitives uniquement (pas d'objet "center" qui change de reference a chaque render)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+</html>`, [markers, center.latitude, center.longitude]);
 
   function handleMessage(event: { nativeEvent: { data: string } }) {
     try {
@@ -162,12 +283,20 @@ export function StationsMap({ stations, center, selectedFuelType, onCenterChange
         return;
       }
 
-      if (message.type === "directions" && message.name) {
-        const url = Platform.OS === "android"
-          ? `geo:${message.lat},${message.lng}?q=${message.lat},${message.lng}(${encodeURIComponent(message.name)})`
-          : `https://maps.apple.com/?daddr=${message.lat},${message.lng}`;
+      if (message.type === "nav" && message.app) {
+        const { lat, lng, app } = message;
 
-        Linking.openURL(url);
+        const urls: Record<string, string> = {
+          google: `https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}`,
+          waze: `waze://?ll=${lat},${lng}&navigate=yes`,
+          apple: `https://maps.apple.com/?daddr=${lat},${lng}`,
+        };
+
+        Linking.openURL(urls[app]).catch(() => {
+          if (app === "waze") {
+            Linking.openURL(`https://waze.com/ul?ll=${lat},${lng}&navigate=yes`);
+          }
+        });
       }
     } catch {
       // message invalide, on ignore
@@ -176,6 +305,7 @@ export function StationsMap({ stations, center, selectedFuelType, onCenterChange
 
   return (
     <WebView
+      ref={webViewRef}
       style={styles.map}
       originWhitelist={["*"]}
       source={{ html }}

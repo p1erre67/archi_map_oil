@@ -1,10 +1,13 @@
 import type { StationPriceDto } from "../types/api";
+import { normalizeFuels } from "../utils/normalizeFuels";
 
 interface StationCardProps {
   station: StationPriceDto;
 }
 
 export function StationCard({ station }: StationCardProps) {
+  const fuels = normalizeFuels(station.fuelPrices);
+
   return (
     <div className="station-card">
       <h3>{station.stationName}</h3>
@@ -21,7 +24,7 @@ export function StationCard({ station }: StationCardProps) {
           </tr>
         </thead>
         <tbody>
-          {station.fuelPrices.map((fp) => (
+          {fuels.map((fp) => (
             <tr key={fp.fuelType}>
               <td>{fp.fuelType}</td>
               <td>{fp.pricePerLiter.toFixed(3)} €</td>
