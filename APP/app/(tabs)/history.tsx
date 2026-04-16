@@ -25,7 +25,7 @@ export default function HistoryScreen() {
 
   return (
     <ScrollView style={styles.container}>
-      <Text style={styles.title}>Evolution des prix</Text>
+      <Text style={styles.title}>Evolution global des prix</Text>
 
       <ScrollView
         horizontal

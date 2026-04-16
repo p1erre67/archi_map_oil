@@ -12,18 +12,17 @@ import { useNearbyStations } from "../../src/hooks/useNearbyStations";
 import { useSyncPrices } from "../../src/hooks/useSyncPrices";
 import { StationCard } from "../../src/components/StationCard";
 import { CityPickerModal } from "../../src/components/CityPickerModal";
-import { useLocation } from "../../src/hooks/useLocation";
-import type { City } from "../../src/hooks/useCitySearch";
+import { useFilters } from "../../src/hooks/useFilters";
 
 export default function StationsScreen() {
-  const deviceLocation = useLocation();
-  const [selectedCity, setSelectedCity] = useState<City | null>(null);
-  const [radiusKm, setRadiusKm] = useState(4);
+  const {
+    selectedCity, setSelectedCity,
+    manualCoords, setManualCoords,
+    radiusKm, setRadiusKm,
+    activeLat, activeLng, locationReady,
+    locationLabel,
+  } = useFilters();
   const [pickerVisible, setPickerVisible] = useState(false);
-
-  const activeLat = selectedCity?.latitude ?? deviceLocation.latitude;
-  const activeLng = selectedCity?.longitude ?? deviceLocation.longitude;
-  const locationReady = selectedCity !== null || deviceLocation.ready;
 
   const { data: stations, isLoading, error, refetch } = useNearbyStations(
     activeLat,
@@ -58,10 +57,10 @@ export default function StationsScreen() {
       <View style={styles.locationBar}>
         <View style={styles.locationInfo}>
           <Text style={styles.locationLabel}>
-            {selectedCity ? selectedCity.nom : "Ma position"}
+            {locationLabel}
           </Text>
-          {selectedCity && (
-            <TouchableOpacity onPress={() => setSelectedCity(null)}>
+          {(selectedCity || manualCoords) && (
+            <TouchableOpacity onPress={() => { setSelectedCity(null); setManualCoords(null); }}>
               <Text style={styles.resetBtn}>Reinitialiser</Text>
             </TouchableOpacity>
           )}

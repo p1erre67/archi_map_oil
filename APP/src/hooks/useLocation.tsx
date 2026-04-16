@@ -1,6 +1,5 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
 import * as Location from "expo-location";
-import { Alert } from "react-native";
 
 interface LocationState {
   latitude: number;
@@ -23,6 +22,9 @@ function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
   ]);
 }
 
+// Position par defaut si la geoloc echoue (Paris)
+const FALLBACK: LocationState = { latitude: 48.8566, longitude: 2.3522, ready: true };
+
 export function LocationProvider({ children }: { children: ReactNode }) {
   const [state, setState] = useState<LocationState>({
     latitude: 0,
@@ -35,10 +37,8 @@ export function LocationProvider({ children }: { children: ReactNode }) {
       try {
         const { status } = await Location.requestForegroundPermissionsAsync();
         if (status !== "granted") {
-          Alert.alert(
-            "Permission refusee",
-            "PriceWatch a besoin de votre position pour trouver les stations proches."
-          );
+          // Permission refusee → on demarre avec Paris, l'utilisateur peut choisir une ville
+          setState(FALLBACK);
           return;
         }
 
@@ -53,8 +53,6 @@ export function LocationProvider({ children }: { children: ReactNode }) {
         }
 
         // Rafraichissement : Accuracy.Balanced utilise reseau + GPS via FusedLocationProvider
-        // (Accuracy.Lowest correspond a PRIORITY_PASSIVE qui hang si aucune autre app
-        // ne demande la localisation.)
         const fresh = await withTimeout(
           Location.getCurrentPositionAsync({
             accuracy: Location.Accuracy.Balanced,
@@ -68,10 +66,10 @@ export function LocationProvider({ children }: { children: ReactNode }) {
         });
       } catch (err) {
         console.error("[useLocation] Failed to get location:", err);
-        Alert.alert(
-          "Erreur de localisation",
-          err instanceof Error ? err.message : "Unknown error"
-        );
+        // Timeout ou erreur GPS → on demarre avec Paris plutot que de bloquer l'UI
+        if (!state.ready) {
+          setState(FALLBACK);
+        }
       }
     })();
   }, []);
