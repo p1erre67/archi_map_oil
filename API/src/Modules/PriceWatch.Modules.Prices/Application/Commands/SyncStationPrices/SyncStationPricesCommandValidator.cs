@@ -7,6 +7,11 @@ internal sealed class SyncStationPricesCommandValidator : AbstractValidator<Sync
     public SyncStationPricesCommandValidator()
     {
         RuleFor(x => x.Stations)
-            .NotNull().WithMessage("Stations list must not be null.");
+            .NotNull().WithMessage("La liste de stations ne peut pas etre null.");
+
+        RuleFor(x => x.Stations.Count)
+            .LessThanOrEqualTo(500)
+            .When(x => x.Stations is not null)
+            .WithMessage("La liste de stations ne peut pas depasser 500 elements.");
     }
 }
