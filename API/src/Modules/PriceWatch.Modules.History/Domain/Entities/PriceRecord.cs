@@ -1,6 +1,8 @@
 using PriceWatch.Modules.History.Domain.ValueObjects;
 using PriceWatch.SharedKernel.Domain.Primitives;
 
+using static PriceWatch.SharedKernel.Domain.Primitives.Guard;
+
 namespace PriceWatch.Modules.History.Domain.Entities;
 
 /// <summary>
@@ -42,6 +44,11 @@ public sealed class PriceRecord : Entity<PriceRecordId>
         decimal pricePerLiter,
         DateTime recordedAt)
     {
+        AgainstNullOrWhiteSpace(externalStationId, nameof(externalStationId));
+        AgainstNullOrWhiteSpace(stationName, nameof(stationName));
+        AgainstNullOrWhiteSpace(fuelType, nameof(fuelType));
+        AgainstNegativeOrZero(pricePerLiter, nameof(pricePerLiter));
+
         return new PriceRecord(
             PriceRecordId.New(),
             externalStationId,

@@ -93,7 +93,7 @@ internal sealed class SyncStationPricesCommandHandler : IRequestHandler<SyncStat
 
         if (cache.TryGetValue(externalId, out var cached))
         {
-            cached.UpdateInfo(stationDto.BrandName ?? "", stationDto.BrandShortName ?? "", nbStations);
+            cached.UpdateInfo(stationDto.BrandName ?? "Unknown", stationDto.BrandShortName ?? "N/A", nbStations);
             return cached.ExternalId;
         }
 
@@ -101,12 +101,12 @@ internal sealed class SyncStationPricesCommandHandler : IRequestHandler<SyncStat
 
         if (brand is not null)
         {
-            brand.UpdateInfo(stationDto.BrandName ?? "", stationDto.BrandShortName ?? "", nbStations);
+            brand.UpdateInfo(stationDto.BrandName ?? "Unknown", stationDto.BrandShortName ?? "N/A", nbStations);
             cache[externalId] = brand;
             return brand.ExternalId;
         }
 
-        brand = Brand.Create(externalId, stationDto.BrandName ?? "", stationDto.BrandShortName ?? "", nbStations);
+        brand = Brand.Create(externalId, stationDto.BrandName ?? "Unknown", stationDto.BrandShortName ?? "N/A", nbStations);
         _brandRepository.Add(brand);
         cache[externalId] = brand;
         return brand.ExternalId;

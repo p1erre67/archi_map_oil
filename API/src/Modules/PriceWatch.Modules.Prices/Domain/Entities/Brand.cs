@@ -1,3 +1,5 @@
+using PriceWatch.SharedKernel.Domain.Primitives;
+
 namespace PriceWatch.Modules.Prices.Domain.Entities;
 
 public sealed class Brand
@@ -16,10 +18,20 @@ public sealed class Brand
     }
 
     public static Brand Create(int externalId, string name, string shortName, int nbStations)
-        => new(externalId, name, shortName, nbStations);
+    {
+        Guard.AgainstNullOrWhiteSpace(name, nameof(name));
+        Guard.AgainstNullOrWhiteSpace(shortName, nameof(shortName));
+        Guard.AgainstNegative(nbStations, nameof(nbStations));
+
+        return new(externalId, name, shortName, nbStations);
+    }
 
     public void UpdateInfo(string name, string shortName, int nbStations)
     {
+        Guard.AgainstNullOrWhiteSpace(name, nameof(name));
+        Guard.AgainstNullOrWhiteSpace(shortName, nameof(shortName));
+        Guard.AgainstNegative(nbStations, nameof(nbStations));
+
         Name = name;
         ShortName = shortName;
         NbStations = nbStations;

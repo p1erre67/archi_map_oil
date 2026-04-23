@@ -29,4 +29,43 @@ public class PriceRecordTests
 
         r1.Id.Should().NotBe(r2.Id);
     }
+
+    // ── Guard Clause Tests ───────────────────────────────────────────────────
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData("   ")]
+    public void Create_WithInvalidExternalStationId_ShouldThrow(string? invalidId)
+    {
+        var act = () => PriceRecord.Create(invalidId!, "A", "Paris", "Gazole", 1.85m, DateTime.UtcNow);
+        act.Should().Throw<ArgumentException>();
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    public void Create_WithInvalidStationName_ShouldThrow(string? invalidName)
+    {
+        var act = () => PriceRecord.Create("EXT-001", invalidName!, "Paris", "Gazole", 1.85m, DateTime.UtcNow);
+        act.Should().Throw<ArgumentException>();
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    public void Create_WithInvalidFuelType_ShouldThrow(string? invalidFuelType)
+    {
+        var act = () => PriceRecord.Create("EXT-001", "A", "Paris", invalidFuelType!, 1.85m, DateTime.UtcNow);
+        act.Should().Throw<ArgumentException>();
+    }
+
+    [Theory]
+    [InlineData(0)]
+    [InlineData(-1)]
+    public void Create_WithInvalidPricePerLiter_ShouldThrow(decimal invalidPrice)
+    {
+        var act = () => PriceRecord.Create("EXT-001", "A", "Paris", "Gazole", invalidPrice, DateTime.UtcNow);
+        act.Should().Throw<ArgumentOutOfRangeException>();
+    }
 }

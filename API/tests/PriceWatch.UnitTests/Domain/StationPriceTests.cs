@@ -119,4 +119,95 @@ public class StationPriceTests
 
         station.DomainEvents.Should().BeEmpty();
     }
+
+    // ── Guard Clause Tests ───────────────────────────────────────────────────
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData("   ")]
+    public void Create_WithInvalidExternalStationId_ShouldThrow(string? invalidId)
+    {
+        var act = () => StationPrice.Create(invalidId!, "Station", "addr", "city", "00000", 48.0, 2.0);
+        act.Should().Throw<ArgumentException>();
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData("   ")]
+    public void Create_WithInvalidStationName_ShouldThrow(string? invalidName)
+    {
+        var act = () => StationPrice.Create("EXT-001", invalidName!, "addr", "city", "00000", 48.0, 2.0);
+        act.Should().Throw<ArgumentException>();
+    }
+
+    [Theory]
+    [InlineData(-91)]
+    [InlineData(91)]
+    public void Create_WithLatitudeOutOfRange_ShouldThrow(double latitude)
+    {
+        var act = () => StationPrice.Create("EXT-001", "Station", "addr", "city", "00000", latitude, 2.0);
+        act.Should().Throw<ArgumentOutOfRangeException>();
+    }
+
+    [Theory]
+    [InlineData(-181)]
+    [InlineData(181)]
+    public void Create_WithLongitudeOutOfRange_ShouldThrow(double longitude)
+    {
+        var act = () => StationPrice.Create("EXT-001", "Station", "addr", "city", "00000", 48.0, longitude);
+        act.Should().Throw<ArgumentOutOfRangeException>();
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    public void UpdateInfo_WithInvalidStationName_ShouldThrow(string? invalidName)
+    {
+        var station = StationPrice.Create("EXT-001", "A", "addr", "city", "00000", 0, 0);
+
+        var act = () => station.UpdateInfo(invalidName!, "addr", "city", "00000", 0, 0);
+        act.Should().Throw<ArgumentException>();
+    }
+
+    [Fact]
+    public void UpdateInfo_WithLatitudeOutOfRange_ShouldThrow()
+    {
+        var station = StationPrice.Create("EXT-001", "A", "addr", "city", "00000", 0, 0);
+
+        var act = () => station.UpdateInfo("A", "addr", "city", "00000", 91, 0);
+        act.Should().Throw<ArgumentOutOfRangeException>();
+    }
+
+    [Fact]
+    public void UpdateInfo_WithLongitudeOutOfRange_ShouldThrow()
+    {
+        var station = StationPrice.Create("EXT-001", "A", "addr", "city", "00000", 0, 0);
+
+        var act = () => station.UpdateInfo("A", "addr", "city", "00000", 0, 181);
+        act.Should().Throw<ArgumentOutOfRangeException>();
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    public void UpsertFuelPrice_WithInvalidFuelType_ShouldThrow(string? invalidFuelType)
+    {
+        var station = StationPrice.Create("EXT-001", "A", "addr", "city", "00000", 0, 0);
+
+        var act = () => station.UpsertFuelPrice(invalidFuelType!, 1.85m, DateTime.UtcNow);
+        act.Should().Throw<ArgumentException>();
+    }
+
+    [Theory]
+    [InlineData(0)]
+    [InlineData(-1)]
+    public void UpsertFuelPrice_WithInvalidPrice_ShouldThrow(decimal invalidPrice)
+    {
+        var station = StationPrice.Create("EXT-001", "A", "addr", "city", "00000", 0, 0);
+
+        var act = () => station.UpsertFuelPrice("Gazole", invalidPrice, DateTime.UtcNow);
+        act.Should().Throw<ArgumentOutOfRangeException>();
+    }
 }

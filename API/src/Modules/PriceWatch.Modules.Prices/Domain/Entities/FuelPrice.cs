@@ -1,3 +1,5 @@
+using PriceWatch.SharedKernel.Domain.Primitives;
+
 namespace PriceWatch.Modules.Prices.Domain.Entities;
 
 /// <summary>
@@ -18,10 +20,17 @@ public sealed class FuelPrice
     }
 
     public static FuelPrice Create(string fuelType, decimal pricePerLiter, DateTime updatedAt)
-        => new(fuelType, pricePerLiter, updatedAt);
+    {
+        Guard.AgainstNullOrWhiteSpace(fuelType, nameof(fuelType));
+        Guard.AgainstNegativeOrZero(pricePerLiter, nameof(pricePerLiter));
+
+        return new(fuelType, pricePerLiter, updatedAt);
+    }
 
     public void UpdatePrice(decimal pricePerLiter, DateTime updatedAt)
     {
+        Guard.AgainstNegativeOrZero(pricePerLiter, nameof(pricePerLiter));
+
         PricePerLiter = pricePerLiter;
         UpdatedAt = updatedAt;
     }

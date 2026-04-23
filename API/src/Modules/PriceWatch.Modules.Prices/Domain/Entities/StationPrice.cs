@@ -2,6 +2,8 @@ using PriceWatch.Modules.Prices.Domain.Events;
 using PriceWatch.Modules.Prices.Domain.ValueObjects;
 using PriceWatch.SharedKernel.Domain.Primitives;
 
+using static PriceWatch.SharedKernel.Domain.Primitives.Guard;
+
 namespace PriceWatch.Modules.Prices.Domain.Entities;
 
 /// <summary>
@@ -55,6 +57,11 @@ public sealed class StationPrice : AggregateRoot<StationPriceId>
         double longitude,
         int? brandId = null)
     {
+        AgainstNullOrWhiteSpace(externalStationId, nameof(externalStationId));
+        AgainstNullOrWhiteSpace(stationName, nameof(stationName));
+        AgainstOutOfRange(latitude, -90, 90, nameof(latitude));
+        AgainstOutOfRange(longitude, -180, 180, nameof(longitude));
+
         var station = new StationPrice(
             StationPriceId.New(),
             externalStationId,
@@ -77,6 +84,10 @@ public sealed class StationPrice : AggregateRoot<StationPriceId>
         double longitude,
         int? brandId = null)
     {
+        AgainstNullOrWhiteSpace(stationName, nameof(stationName));
+        AgainstOutOfRange(latitude, -90, 90, nameof(latitude));
+        AgainstOutOfRange(longitude, -180, 180, nameof(longitude));
+
         StationName = stationName;
         Address = address;
         City = city;
@@ -89,6 +100,9 @@ public sealed class StationPrice : AggregateRoot<StationPriceId>
 
     public void UpsertFuelPrice(string fuelType, decimal pricePerLiter, DateTime updatedAt)
     {
+        AgainstNullOrWhiteSpace(fuelType, nameof(fuelType));
+        AgainstNegativeOrZero(pricePerLiter, nameof(pricePerLiter));
+
         var existing = _fuelPrices.FirstOrDefault(fp => fp.FuelType == fuelType);
         if (existing is not null)
         {

@@ -28,4 +28,36 @@ public class FuelPriceTests
         fuel.PricePerLiter.Should().Be(1.95m);
         fuel.UpdatedAt.Should().Be(newDate);
     }
+
+    // ── Guard Clause Tests ───────────────────────────────────────────────────
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData("   ")]
+    public void Create_WithInvalidFuelType_ShouldThrow(string? invalidFuelType)
+    {
+        var act = () => FuelPrice.Create(invalidFuelType!, 1.85m, DateTime.UtcNow);
+        act.Should().Throw<ArgumentException>();
+    }
+
+    [Theory]
+    [InlineData(0)]
+    [InlineData(-1)]
+    public void Create_WithInvalidPricePerLiter_ShouldThrow(decimal invalidPrice)
+    {
+        var act = () => FuelPrice.Create("Gazole", invalidPrice, DateTime.UtcNow);
+        act.Should().Throw<ArgumentOutOfRangeException>();
+    }
+
+    [Theory]
+    [InlineData(0)]
+    [InlineData(-5)]
+    public void UpdatePrice_WithInvalidPrice_ShouldThrow(decimal invalidPrice)
+    {
+        var fuel = FuelPrice.Create("Gazole", 1.85m, DateTime.UtcNow);
+
+        var act = () => fuel.UpdatePrice(invalidPrice, DateTime.UtcNow);
+        act.Should().Throw<ArgumentOutOfRangeException>();
+    }
 }

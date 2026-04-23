@@ -27,4 +27,64 @@ public class BrandTests
         brand.ShortName.Should().Be("N");
         brand.NbStations.Should().Be(200);
     }
+
+    // ── Guard Clause Tests ───────────────────────────────────────────────────
+
+    [Theory]// lance 1 test par inline 
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData("   ")]
+    public void Create_WithInvalidName_ShouldThrow(string? invalidName)
+    {
+        var act = () => Brand.Create(1, invalidName!, "Short", 100);
+        act.Should().Throw<ArgumentException>();
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData("   ")]
+    public void Create_WithInvalidShortName_ShouldThrow(string? invalidShortName)
+    {
+        var act = () => Brand.Create(1, "Name", invalidShortName!, 100);
+        act.Should().Throw<ArgumentException>();
+    }
+
+    [Fact]
+    public void Create_WithNegativeNbStations_ShouldThrow()
+    {
+        var act = () => Brand.Create(1, "Name", "Short", -1);
+        act.Should().Throw<ArgumentOutOfRangeException>();
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    public void UpdateInfo_WithInvalidName_ShouldThrow(string? invalidName)
+    {
+        var brand = Brand.Create(1, "Valid", "V", 100);
+
+        var act = () => brand.UpdateInfo(invalidName!, "V", 100);
+        act.Should().Throw<ArgumentException>();
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    public void UpdateInfo_WithInvalidShortName_ShouldThrow(string? invalidShortName)
+    {
+        var brand = Brand.Create(1, "Valid", "V", 100);
+
+        var act = () => brand.UpdateInfo("Valid", invalidShortName!, 100);
+        act.Should().Throw<ArgumentException>();
+    }
+
+    [Fact]
+    public void UpdateInfo_WithNegativeNbStations_ShouldThrow()
+    {
+        var brand = Brand.Create(1, "Valid", "V", 100);
+
+        var act = () => brand.UpdateInfo("Valid", "V", -1);
+        act.Should().Throw<ArgumentOutOfRangeException>();
+    }
 }
